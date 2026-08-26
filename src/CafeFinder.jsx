@@ -89,6 +89,10 @@ function outletRangeLabel(cafe) {
   return range ? `콘센트 ${range.label}` : "콘센트";
 }
 
+function inferDong(address, fallback = "") {
+  return address.match(/[가-힣]+동/)?.[0] || fallback;
+}
+
 const DAYS = [
   { key: "mon", label: "월" }, { key: "tue", label: "화" }, { key: "wed", label: "수" },
   { key: "thu", label: "목" }, { key: "fri", label: "금" }, { key: "sat", label: "토" }, { key: "sun", label: "일" },
@@ -97,6 +101,34 @@ const DAYS = [
 const DEFAULT_WEEKLY_HOURS = Object.fromEntries(
   DAYS.map(({ key }) => [key, { closed: false, open: "09:00", close: "22:00" }])
 );
+
+function parseWeeklyHoursText(text, currentHours) {
+  const parsedHours = { ...currentHours };
+  let parsedCount = 0;
+  let pendingDay = null;
+  text.split(/\r?\n/).forEach((line) => {
+    const dayMatch = line.match(/(월|화|수|목|금|토|일)(?:요일)?/);
+    const timeMatch = line.match(/(\d{1,2}):(\d{2})\s*(?:-|~|–|—)\s*(\d{1,2}):(\d{2})/);
+    const targetDay = dayMatch ? DAYS.find(({ label }) => label === dayMatch[1]) : pendingDay;
+    if (dayMatch && !timeMatch && !/휴무/.test(line)) pendingDay = targetDay;
+    if (!targetDay) return;
+    if (/휴무/.test(line)) {
+      parsedHours[targetDay.key] = { ...parsedHours[targetDay.key], closed: true };
+      parsedCount += 1;
+      pendingDay = null;
+      return;
+    }
+    if (!timeMatch) return;
+    parsedHours[targetDay.key] = {
+      closed: false,
+      open: `${timeMatch[1].padStart(2, "0")}:${timeMatch[2]}`,
+      close: `${timeMatch[3].padStart(2, "0")}:${timeMatch[4]}`,
+    };
+    parsedCount += 1;
+    pendingDay = null;
+  });
+  return { parsedHours, parsedCount };
+}
 
 function weeklyHoursSummary(weeklyHours) {
   if (!weeklyHours) return null;
@@ -289,7 +321,7 @@ function useDaumPostcodeScript() {
 }
 
 /* 네이버 지오코딩 - 주소 문자열을 좌표로 변환 (submodules=geocoder 필요) */
-function geocodeAddress(address, callback) {
+function geocodeAddressResults(query, callback) {
   if (!window.naver || !window.naver.maps || !window.naver.maps.Service) {
     callback(null);
     return;
@@ -305,12 +337,22 @@ function geocodeAddress(address, callback) {
         callback(null);
         return;
       }
-      callback({ lat: Number(items[0].y), lng: Number(items[0].x) });
+      callback(items.map((item) => ({
+        lat: Number(item.y),
+        lng: Number(item.x),
+        address: item.roadAddress || item.jibunAddress || item.address || query,
+        roadAddress: item.roadAddress,
+        jibunAddress: item.jibunAddress,
+      })));
     });
   } catch (e) {
     console.error("지오코딩 실패:", e);
     callback(null);
   }
+}
+
+function geocodeAddress(address, callback) {
+  geocodeAddressResults(address, (results) => callback(results && results[0]));
 }
 
 function useIsMobile(breakpoint = 768) {
@@ -474,10 +516,13 @@ function CafeFinderInner() {
     const newCafe = {
       id: Date.now(),
       name: data.name,
-      dong: data.dong,
+      dong: data.dong || inferDong(data.address),
       address: data.address,
       tags: data.tags,
       outletRange: data.outletRange,
+      naverName: data.naverName,
+      naverLink: data.naverLink,
+      phone: data.phone,
       seats: Number(data.seats) || 0,
       rating: 0,
       hours: weeklyHoursSummary(data.weeklyHours) || "정보 없음",
@@ -892,7 +937,7 @@ function TimePicker({ value, onChange, label }) {
 /* ---------- 등록 폼 ---------- */
 function CafeForm({ pickedLoc, onCancel, onSubmit, mapStatus, onSetLoc }) {
   const [name, setName] = useState("");
-  const [dong, setDong] = useState("");
+  const [naverPlace, setNaverPlace] = useState(null);
   const [address, setAddress] = useState("");
   const [seats, setSeats] = useState("");
   const [weeklyHours, setWeeklyHours] = useState(DEFAULT_WEEKLY_HOURS);
@@ -900,16 +945,19 @@ function CafeForm({ pickedLoc, onCancel, onSubmit, mapStatus, onSetLoc }) {
   const [commonClose, setCommonClose] = useState("22:00");
   const [useIndividualHours, setUseIndividualHours] = useState(false);
   const [showSchedule, setShowSchedule] = useState(false);
+  const [schedulePasteText, setSchedulePasteText] = useState("");
+  const [schedulePasteMessage, setSchedulePasteMessage] = useState("");
   const [desc, setDesc] = useState("");
   const [outletRange, setOutletRange] = useState(null);
   const [tags, setTags] = useState({ outlet: false, large: false, interior: false, parking: false, cute: false });
   const [geocoding, setGeocoding] = useState(false);
   const [geocodeFailed, setGeocodeFailed] = useState(false);
+  const [placeQuery, setPlaceQuery] = useState("");
+  const [placeSearching, setPlaceSearching] = useState(false);
+  const [placeResults, setPlaceResults] = useState([]);
   const [showAddressSearch, setShowAddressSearch] = useState(false);
   const postcodeReady = useDaumPostcodeScript();
   const postcodeContainerRef = useRef(null);
-  const dongRef = useRef(dong);
-  dongRef.current = dong;
 
   const canSubmit = name.trim() && address.trim() && outletRange;
 
@@ -926,10 +974,56 @@ function CafeForm({ pickedLoc, onCancel, onSubmit, mapStatus, onSetLoc }) {
     close: useIndividualHours ? weeklyHours[key].close : commonClose,
   }]));
 
+  const applyPastedSchedule = () => {
+    const { parsedHours, parsedCount } = parseWeeklyHoursText(schedulePasteText, weeklyHours);
+    if (parsedCount === 0) {
+      setSchedulePasteMessage("요일별 시간이 인식되지 않았어요. 한 줄에 한 요일씩 붙여넣어 주세요.");
+      return;
+    }
+    setWeeklyHours(parsedHours);
+    setUseIndividualHours(true);
+    setSchedulePasteMessage(`${parsedCount}개 요일의 운영시간을 적용했어요.`);
+  };
+
+  const searchPlace = async () => {
+    const query = placeQuery.trim();
+    if (!query) return;
+    setPlaceSearching(true);
+    setGeocodeFailed(false);
+    try {
+      const response = await fetch(`/api/places?query=${encodeURIComponent(query)}`);
+      const data = await response.json();
+      setPlaceSearching(false);
+      if (!response.ok || !data.places?.length) {
+        setGeocodeFailed(true);
+        setPlaceResults([]);
+        return;
+      }
+      setPlaceResults(data.places);
+    } catch (error) {
+      console.error("장소 검색 실패:", error);
+      setPlaceSearching(false);
+      setGeocodeFailed(true);
+      setPlaceResults([]);
+    }
+  };
+
+  const selectPlaceResult = (result) => {
+    setName(result.name);
+    setNaverPlace({
+      name: result.name,
+      link: `https://map.naver.com/p/search/${encodeURIComponent(`${result.name} ${result.address}`)}`,
+      phone: result.phone,
+      address: result.address,
+    });
+    setAddress(result.address);
+    onSetLoc({ lat: result.lat, lng: result.lng });
+    setPlaceResults([]);
+  };
+
   const handleAddressPicked = (data) => {
     const picked = data.roadAddress || data.jibunAddress || data.address;
     setAddress(picked);
-    setDong(data.bname || dongRef.current);
     setGeocodeFailed(false);
     setShowAddressSearch(false);
 
@@ -980,13 +1074,34 @@ function CafeForm({ pickedLoc, onCancel, onSubmit, mapStatus, onSetLoc }) {
           <label style={styles.label}>
             카페 이름 *
             <input style={styles.input} value={name} onChange={(e) => setName(e.target.value)} placeholder="예: 브루웍스 연남" />
-          </label>
-          <label style={styles.label}>
-            동네
-            <input style={styles.input} value={dong} onChange={(e) => setDong(e.target.value)} placeholder="예: 연남동" />
+            {naverPlace && <span style={styles.naverPlaceHint}>네이버 장소명을 불러왔어요. 필요하면 이름을 수정할 수 있어요.</span>}
           </label>
           <div style={{ ...styles.label, gridColumn: "1 / -1" }}>
             주소 *
+            <div style={styles.placeSearchRow}>
+              <input
+                style={styles.input}
+                value={placeQuery}
+                onChange={(e) => setPlaceQuery(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") searchPlace(); }}
+                placeholder="카페명 또는 주소로 검색 (예: 명동 투썸플레이스)"
+              />
+              <button type="button" style={styles.placeSearchBtn} onClick={searchPlace} disabled={!placeQuery.trim() || placeSearching}>
+                {placeSearching ? "검색 중..." : "검색"}
+              </button>
+            </div>
+            {placeResults.length > 0 && (
+              <div style={styles.placeResults}>
+                <span style={styles.placeResultsTitle}>검색 결과</span>
+                {placeResults.map((result, index) => (
+                  <button key={`${result.address}-${index}`} type="button" style={styles.placeResultBtn} onClick={() => selectPlaceResult(result)}>
+                    <strong>{result.name}</strong>
+                    <small style={styles.placeResultSmall}>{result.address}</small>
+                    {result.category && <small style={styles.placeResultCategory}>{result.category}</small>}
+                  </button>
+                ))}
+              </div>
+            )}
             {address ? (
               <div style={styles.addressPicked}>
                 <span style={styles.addressPickedText}>{address}</span>
@@ -1033,6 +1148,25 @@ function CafeForm({ pickedLoc, onCancel, onSubmit, mapStatus, onSetLoc }) {
                 <button type="button" style={{ ...styles.schedulePresetBtn, ...(useIndividualHours ? styles.schedulePresetBtnActive : {}) }} onClick={() => setUseIndividualHours((value) => !value)}>
                   {useIndividualHours ? "공통 시간 사용" : "요일별로 다르게 설정"}
                 </button>
+              </div>
+              <div style={styles.schedulePasteBox}>
+                {naverPlace?.link ? (
+                  <a href={naverPlace.link} target="_blank" rel="noreferrer" style={styles.schedulePasteTitleLink}>
+                    네이버 플레이스 운영시간 붙여넣기 ↗
+                  </a>
+                ) : (
+                  <span style={styles.schedulePasteTitle}>네이버 플레이스를 먼저 검색해 선택해주세요</span>
+                )}
+                <textarea
+                  style={styles.schedulePasteInput}
+                  value={schedulePasteText}
+                  onChange={(e) => { setSchedulePasteText(e.target.value); setSchedulePasteMessage(""); }}
+                  placeholder={"예시\n월 09:00 - 22:00\n화 정기휴무\n수 09:00 - 22:00"}
+                />
+                <div style={styles.schedulePasteActions}>
+                  <button type="button" style={styles.scheduleApplyBtn} onClick={applyPastedSchedule}>시간 적용</button>
+                  {schedulePasteMessage && <span style={styles.schedulePasteMessage}>{schedulePasteMessage}</span>}
+                </div>
               </div>
               {DAYS.map(({ key, label }) => {
                 const day = weeklyHours[key];
@@ -1105,7 +1239,7 @@ function CafeForm({ pickedLoc, onCancel, onSubmit, mapStatus, onSetLoc }) {
           <button
             style={{ ...styles.submitBtn, opacity: canSubmit ? 1 : 0.45, cursor: canSubmit ? "pointer" : "not-allowed" }}
             disabled={!canSubmit}
-            onClick={() => canSubmit && onSubmit({ name, dong, address, seats, weeklyHours: getSubmittedWeeklyHours(), desc, tags: { ...tags, outlet: outletRange !== "none" }, outletRange })}
+            onClick={() => canSubmit && onSubmit({ name, dong: inferDong(address, placeQuery.split(" ")[0]), address, seats, weeklyHours: getSubmittedWeeklyHours(), desc, tags: { ...tags, outlet: outletRange !== "none" }, outletRange, naverName: naverPlace?.name, naverLink: naverPlace?.link, phone: naverPlace?.phone })}
           >
             등록하기
           </button>
@@ -1503,7 +1637,15 @@ const styles = {
   formGrid: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 },
   label: { display: "flex", flexDirection: "column", gap: 5, fontSize: 12.5, color: COLOR.inkSoft, fontWeight: 500 },
   input: { padding: "9px 10px", borderRadius: 8, border: `1px solid ${COLOR.border}`, fontSize: 15, fontFamily: "'Noto Sans KR', sans-serif", color: COLOR.ink },
+  naverPlaceHint: { color: COLOR.teal, fontSize: 11 },
   addressSearchBtn: { display: "flex", alignItems: "center", gap: 6, padding: "9px 10px", borderRadius: 8, border: `1px solid ${COLOR.border}`, background: COLOR.surface, color: COLOR.inkSoft, fontSize: 13.5, cursor: "pointer" },
+  placeSearchRow: { display: "flex", alignItems: "stretch", gap: 7 },
+  placeSearchBtn: { flexShrink: 0, minWidth: 62, border: "none", borderRadius: 8, background: COLOR.teal, color: "#FFFDF8", fontSize: 12.5, fontWeight: 600, cursor: "pointer" },
+  placeResults: { display: "flex", flexDirection: "column", gap: 5, marginTop: 7, padding: 8, borderRadius: 9, border: `1px solid ${COLOR.border}`, background: "#FAF8F0" },
+  placeResultsTitle: { padding: "2px 4px", color: COLOR.inkSoft, fontSize: 11.5, fontWeight: 600 },
+  placeResultBtn: { display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 2, width: "100%", padding: "9px 10px", border: `1px solid ${COLOR.border}`, borderRadius: 8, background: COLOR.surface, color: COLOR.ink, textAlign: "left", cursor: "pointer", touchAction: "manipulation" },
+  placeResultSmall: { color: COLOR.inkSoft, fontSize: 11 },
+  placeResultCategory: { color: COLOR.teal, fontSize: 10.5 },
   addressPicked: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "9px 10px", borderRadius: 8, border: `1px solid ${COLOR.border}`, background: COLOR.tealSoft },
   addressPickedText: { fontSize: 13.5, color: COLOR.ink, flex: 1 },
   addressResearchBtn: { padding: "5px 10px", borderRadius: 999, border: "none", background: COLOR.teal, color: "#FFFDF8", fontSize: 11.5, fontWeight: 600, whiteSpace: "nowrap", cursor: "pointer" },
@@ -1533,6 +1675,13 @@ const styles = {
   schedulePresetLabel: { marginRight: 2, fontSize: 11.5, color: COLOR.inkSoft },
   schedulePresetBtn: { minHeight: 42, padding: "8px 14px", borderRadius: 10, border: `1px solid ${COLOR.border}`, background: COLOR.surface, color: COLOR.inkSoft, fontSize: 12.5, fontWeight: 600, cursor: "pointer", touchAction: "manipulation" },
   schedulePresetBtnActive: { background: COLOR.tealSoft, borderColor: COLOR.teal, color: COLOR.teal },
+  schedulePasteBox: { display: "flex", flexDirection: "column", gap: 10, padding: 13, borderRadius: 10, background: COLOR.surface, border: `1px dashed ${COLOR.border}` },
+  schedulePasteTitle: { color: COLOR.ink, fontSize: 11.5, fontWeight: 600 },
+  schedulePasteTitleLink: { display: "flex", alignItems: "center", justifyContent: "center", minHeight: 48, padding: "0 12px", borderRadius: 9, background: COLOR.tealSoft, color: COLOR.teal, fontSize: 13, fontWeight: 700, textDecoration: "none", textAlign: "center", touchAction: "manipulation" },
+  schedulePasteInput: { width: "100%", minHeight: 120, boxSizing: "border-box", padding: 12, borderRadius: 8, border: `1px solid ${COLOR.border}`, resize: "vertical", color: COLOR.ink, background: "#FAF8F0", fontFamily: "'Noto Sans KR', sans-serif", fontSize: 14, lineHeight: 1.6 },
+  schedulePasteActions: { display: "flex", alignItems: "center", gap: 9, flexWrap: "wrap" },
+  scheduleApplyBtn: { minHeight: 48, padding: "0 17px", border: "none", borderRadius: 9, background: COLOR.teal, color: "#FFFDF8", fontSize: 13, fontWeight: 700, cursor: "pointer", touchAction: "manipulation" },
+  schedulePasteMessage: { color: COLOR.teal, fontSize: 11 },
   daySchedule: { display: "flex", alignItems: "center", minHeight: 48, gap: 8 },
   dayClosed: { display: "flex", alignItems: "center", gap: 8, flex: 1, minHeight: 44, padding: "5px 9px", borderRadius: 9, color: COLOR.ink, fontSize: 13, cursor: "pointer", touchAction: "manipulation" },
   dayClosedActive: { background: COLOR.accentSoft, color: COLOR.accent },
