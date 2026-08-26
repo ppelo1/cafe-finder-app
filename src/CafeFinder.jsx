@@ -76,6 +76,19 @@ const FILTERS = [
   { key: "parking", label: "주차가능", icon: ParkingIcon },
 ];
 
+const OUTLET_RANGES = [
+  { value: "none", label: "없음" },
+  { value: "1-3", label: "1~3석" },
+  { value: "4-7", label: "4~7석" },
+  { value: "8-15", label: "8~15석" },
+  { value: "16-plus", label: "16석 이상" },
+];
+
+function outletRangeLabel(cafe) {
+  const range = OUTLET_RANGES.find((item) => item.value === cafe.outletRange);
+  return range ? `콘센트 ${range.label}` : "콘센트";
+}
+
 const DAYS = [
   { key: "mon", label: "월" }, { key: "tue", label: "화" }, { key: "wed", label: "수" },
   { key: "thu", label: "목" }, { key: "fri", label: "금" }, { key: "sat", label: "토" }, { key: "sun", label: "일" },
@@ -372,10 +385,14 @@ function CafeFinderInner() {
   const [showForm, setShowForm] = useState(false);
   const [pickedLoc, setPickedLoc] = useState(null); // {lat,lng} 지도 클릭으로 지정
   const cardRefs = useRef({});
+  const filterBarRef = useRef(null);
+  const filterDragRef = useRef({ active: false, startX: 0, startScrollLeft: 0, moved: false });
   const [mobileTab, setMobileTab] = useState("map");
   const [queryInput, setQueryInput] = useState("");
   const [query, setQuery] = useState("");
   const [openNowOnly, setOpenNowOnly] = useState(false);
+  const [outletRangeFilter, setOutletRangeFilter] = useState(null);
+  const [showOutletMenu, setShowOutletMenu] = useState(false);
 
   const mapStatus = useNaverMapsScript(NAVER_CONFIG.clientId);
 
@@ -387,10 +404,49 @@ function CafeFinderInner() {
     });
   };
 
+  const toggleOutletRangeFilter = (range) => {
+    setOutletRangeFilter((current) => current === range ? null : range);
+    setShowOutletMenu(false);
+  };
+
+  const handleFilterMouseDown = (event) => {
+    if (event.button !== 0 || !filterBarRef.current) return;
+    filterDragRef.current = {
+      active: true,
+      startX: event.clientX,
+      startScrollLeft: filterBarRef.current.scrollLeft,
+      moved: false,
+    };
+  };
+
+  const handleFilterMouseMove = (event) => {
+    const drag = filterDragRef.current;
+    if (!drag.active || !filterBarRef.current) return;
+    const distance = event.clientX - drag.startX;
+    if (Math.abs(distance) > 4) drag.moved = true;
+    filterBarRef.current.scrollLeft = drag.startScrollLeft - distance;
+  };
+
+  const handleFilterMouseUp = () => {
+    filterDragRef.current.active = false;
+  };
+
+  const handleFilterClick = (event) => {
+    if (!filterDragRef.current.moved) return;
+    event.preventDefault();
+    event.stopPropagation();
+    filterDragRef.current.moved = false;
+  };
+
   const filtered = useMemo(() => {
     let list = cafes;
     if (active.size > 0) {
       list = list.filter((c) => [...active].every((k) => c.tags[k]));
+    }
+    if (outletRangeFilter) {
+      list = list.filter((c) => outletRangeFilter === "any"
+        ? c.tags.outlet
+        : c.outletRange === outletRangeFilter);
     }
     if (openNowOnly) {
       list = list.filter((c) => isOpenNow(c.hours) === true);
@@ -402,7 +458,7 @@ function CafeFinderInner() {
       );
     }
     return list;
-  }, [active, cafes, query, openNowOnly]);
+  }, [active, cafes, query, openNowOnly, outletRangeFilter]);
 
   const selectCafe = (id) => {
     setSelected(id);
@@ -421,6 +477,7 @@ function CafeFinderInner() {
       dong: data.dong,
       address: data.address,
       tags: data.tags,
+      outletRange: data.outletRange,
       seats: Number(data.seats) || 0,
       rating: 0,
       hours: weeklyHoursSummary(data.weeklyHours) || "정보 없음",
@@ -469,6 +526,7 @@ function CafeFinderInner() {
             if (e.key === "Enter") {
               setActive(new Set());
               setOpenNowOnly(false);
+              setOutletRangeFilter(null);
               setQuery(queryInput.trim());
             }
           }}
@@ -486,7 +544,16 @@ function CafeFinderInner() {
       </div>
 
       <div style={styles.filterBarWrap}>
-        <div style={styles.filterBar} className="cf-filterbar">
+        <div
+          ref={filterBarRef}
+          style={styles.filterBar}
+          className="cf-filterbar"
+          onMouseDown={handleFilterMouseDown}
+          onMouseMove={handleFilterMouseMove}
+          onMouseUp={handleFilterMouseUp}
+          onMouseLeave={handleFilterMouseUp}
+          onClick={handleFilterClick}
+        >
           <button
             onClick={() => setOpenNowOnly((v) => !v)}
             style={{ ...styles.filterChip, ...(openNowOnly ? styles.filterChipActive : {}) }}
@@ -494,7 +561,7 @@ function CafeFinderInner() {
             <ClockIcon size={15} color={openNowOnly ? "#FFFDF8" : "#5B5648"} />
             지금 영업중
           </button>
-          {FILTERS.map(({ key, label, icon: Icon }) => {
+          {FILTERS.filter(({ key }) => key !== "outlet").map(({ key, label, icon: Icon }) => {
             const isActive = active.has(key);
             return (
               <button
@@ -507,10 +574,29 @@ function CafeFinderInner() {
               </button>
             );
           })}
-          {(active.size > 0 || openNowOnly) && (
-            <button onClick={() => { setActive(new Set()); setOpenNowOnly(false); }} style={styles.resetBtn}>초기화</button>
+          <button
+            onClick={() => setShowOutletMenu((value) => !value)}
+            style={{ ...styles.filterChip, ...(outletRangeFilter ? styles.filterChipActive : {}) }}
+            aria-expanded={showOutletMenu}
+          >
+            <OutletIcon size={15} color={outletRangeFilter ? "#FFFDF8" : "#5B5648"} />
+            {outletRangeFilter === "any" ? "콘센트 있음" : outletRangeFilter ? `콘센트 ${OUTLET_RANGES.find(({ value }) => value === outletRangeFilter)?.label}` : "콘센트"}
+          </button>
+          {(active.size > 0 || openNowOnly || outletRangeFilter) && (
+            <button onClick={() => { setActive(new Set()); setOpenNowOnly(false); setOutletRangeFilter(null); }} style={styles.resetBtn}>초기화</button>
           )}
         </div>
+        {showOutletMenu && (
+          <div style={styles.outletFilterMenu}>
+            <strong style={styles.outletFilterTitle}>콘센트 있는 좌석 수</strong>
+            <div style={styles.outletFilterOptions}>
+              <button type="button" style={{ ...styles.outletFilterOption, ...(outletRangeFilter === "any" ? styles.outletFilterOptionActive : {}) }} onClick={() => toggleOutletRangeFilter("any")}>전체</button>
+              {OUTLET_RANGES.filter(({ value }) => !["none", "unknown"].includes(value)).map(({ value, label }) => (
+                <button key={value} type="button" style={{ ...styles.outletFilterOption, ...(outletRangeFilter === value ? styles.outletFilterOptionActive : {}) }} onClick={() => toggleOutletRangeFilter(value)}>{label}</button>
+              ))}
+            </div>
+          </div>
+        )}
         <div style={styles.filterBarFade} />
       </div>
 
@@ -564,7 +650,7 @@ function CafeFinderInner() {
                   {FILTERS.filter((f) => c.tags[f.key]).map(({ key, label, icon: Icon }) => (
                     <span key={key} style={styles.badge}>
                       <Icon size={12} color="#3D6B5F" />
-                      {label}
+                      {key === "outlet" ? outletRangeLabel(c) : label}
                     </span>
                   ))}
                 </div>
@@ -637,6 +723,9 @@ function CafeDetailModal({ cafe, onClose, onAddReview }) {
   const [reviewRating, setReviewRating] = useState(0);
   const [reviewImages, setReviewImages] = useState([]);
   const [showReviewComposer, setShowReviewComposer] = useState(false);
+  const [composerMode, setComposerMode] = useState("review");
+  const [detailTab, setDetailTab] = useState("photos");
+  const [selectedPhotoIndex, setSelectedPhotoIndex] = useState(null);
 
   const handleReviewImages = (event) => {
     const files = Array.from(event.target.files || []).slice(0, 5);
@@ -672,7 +761,7 @@ function CafeDetailModal({ cafe, onClose, onAddReview }) {
         <p style={styles.detailAddress}>{cafe.dong} · {cafe.address}</p>
         <div style={styles.badgeRow}>
           {FILTERS.filter((filter) => cafe.tags[filter.key]).map(({ key, label, icon: Icon }) => (
-            <span key={key} style={styles.badge}><Icon size={12} color="#3D6B5F" />{label}</span>
+        <span key={key} style={styles.badge}><Icon size={12} color="#3D6B5F" />{key === "outlet" ? outletRangeLabel(cafe) : label}</span>
           ))}
         </div>
         <p style={styles.detailDescription}>{cafe.desc || "등록된 소개가 없습니다."}</p>
@@ -684,47 +773,83 @@ function CafeDetailModal({ cafe, onClose, onAddReview }) {
         </div>
         <a href={naverMapUrl} target="_blank" rel="noreferrer" style={styles.naverMapLink}>네이버 지도에서 보기 ↗</a>
         <section style={styles.reviewSection}>
-          <div style={styles.reviewSectionHeader}>
-            <h3 style={styles.reviewTitle}>리뷰</h3>
-            <button type="button" style={styles.writeReviewBtn} onClick={() => setShowReviewComposer(true)}>리뷰 남기기</button>
+          <div style={styles.detailTabs} role="tablist" aria-label="카페 상세 정보 탭">
+            <button type="button" role="tab" aria-selected={detailTab === "photos"} style={{ ...styles.detailTab, ...(detailTab === "photos" ? styles.detailTabActive : {}) }} onClick={() => setDetailTab("photos")}>
+              사진
+            </button>
+            <button type="button" role="tab" aria-selected={detailTab === "reviews"} style={{ ...styles.detailTab, ...(detailTab === "reviews" ? styles.detailTabActive : {}) }} onClick={() => setDetailTab("reviews")}>
+              리뷰
+            </button>
           </div>
-          {(cafe.reviews || []).map((review) => (
-            <article key={review.id} style={styles.reviewItem}>
-              <div style={styles.reviewItemTop}><span style={styles.reviewStars}>{review.rating ? `${"★".repeat(review.rating)}${"☆".repeat(5 - review.rating)}` : "사진 리뷰"}</span><time style={styles.reviewDate}>{review.createdAt}</time></div>
-              {review.text && <p style={styles.reviewText}>{review.text}</p>}
-              {review.images?.length > 0 && <div style={styles.reviewImageGrid}>{review.images.map((image, index) => <img key={image} src={image} alt={`리뷰 사진 ${index + 1}`} style={styles.reviewImage} />)}</div>}
-            </article>
-          ))}
-          <div style={styles.photoGallerySection}>
-            <h3 style={styles.reviewTitle}>사진</h3>
-            {reviewPhotoList.length > 0 ? (
-              <div style={styles.photoGallery}>{reviewPhotoList.map((image, index) => <img key={`${image}-${index}`} src={image} alt={`카페 리뷰 사진 ${index + 1}`} style={styles.galleryImage} />)}</div>
-            ) : (
-              <p style={styles.emptyPhotoText}>아직 등록된 사진이 없습니다.</p>
-            )}
-          </div>
+          {detailTab === "reviews" ? (
+            <div>
+              <div style={styles.reviewSectionHeader}>
+                <h3 style={styles.reviewTitle}>리뷰</h3>
+                <button type="button" style={styles.writeReviewBtn} onClick={() => { setComposerMode("review"); setShowReviewComposer(true); }}>리뷰 남기기</button>
+              </div>
+              {(cafe.reviews || []).length === 0 && <p style={styles.emptyPhotoText}>아직 리뷰가 없습니다.</p>}
+              {(cafe.reviews || []).map((review) => (
+                <article key={review.id} style={styles.reviewItem}>
+                  <div style={styles.reviewItemTop}><span style={styles.reviewStars}>{review.rating ? `${"★".repeat(review.rating)}${"☆".repeat(5 - review.rating)}` : "사진 리뷰"}</span><time style={styles.reviewDate}>{review.createdAt}</time></div>
+                  {review.text && <p style={styles.reviewText}>{review.text}</p>}
+                  {review.images?.length > 0 && <div style={styles.reviewImageGrid}>{review.images.map((image, index) => <img key={image} src={image} alt={`리뷰 사진 ${index + 1}`} style={styles.reviewImage} />)}</div>}
+                </article>
+              ))}
+            </div>
+          ) : (
+            <div style={styles.photoGallerySection}>
+              <div style={styles.photoGalleryHeader}>
+                <h3 style={styles.reviewTitle}>사진</h3>
+                <button type="button" style={styles.addPhotoBtn} onClick={() => { setComposerMode("photo"); setShowReviewComposer(true); }} aria-label="사진 추가">+</button>
+              </div>
+              {reviewPhotoList.length > 0 ? (
+                <div style={styles.photoGallery}>{reviewPhotoList.map((image, index) => <button type="button" key={`${image}-${index}`} style={styles.galleryImageButton} onClick={() => setSelectedPhotoIndex(index)}><img src={image} alt={`카페 리뷰 사진 ${index + 1}`} style={styles.galleryImage} /></button>)}</div>
+              ) : (
+                <div style={styles.emptyPhotoState}>
+                  <p style={styles.emptyPhotoText}>아직 등록된 사진이 없습니다.</p>
+                  <button type="button" style={styles.centerUploadBtn} onClick={() => { setComposerMode("photo"); setShowReviewComposer(true); }}>
+                    <span style={styles.uploadPlus}>+</span>
+                    이미지 업로드
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </section>
       </div>
       {showReviewComposer && (
         <div style={styles.reviewOverlay} onClick={() => setShowReviewComposer(false)}>
           <div style={styles.reviewModal} onClick={(event) => event.stopPropagation()}>
             <div style={styles.reviewModalHeader}>
-              <h3 style={styles.reviewModalTitle}>리뷰 남기기</h3>
+              <h3 style={styles.reviewModalTitle}>{composerMode === "photo" ? "사진 추가" : "리뷰 남기기"}</h3>
               <button type="button" style={styles.reviewModalCloseBtn} onClick={() => setShowReviewComposer(false)} aria-label="리뷰 작성 닫기">×</button>
             </div>
-            <p style={styles.reviewModalCafeName}>{cafe.name}</p>
+            <p style={styles.reviewModalCafeName}>{cafe.name} · 리뷰는 선택이에요</p>
             <div style={styles.ratingPicker} aria-label="별점 선택">
               {[1, 2, 3, 4, 5].map((rating) => (
                 <button key={rating} type="button" onClick={() => setReviewRating(rating)} style={{ ...styles.starButton, ...(rating <= reviewRating ? styles.starButtonActive : {}) }} aria-label={`${rating}점`}>★</button>
               ))}
             </div>
-            <textarea autoFocus style={styles.reviewInput} value={reviewText} onChange={(event) => setReviewText(event.target.value)} placeholder="카페에서의 경험을 남겨주세요" />
+            <textarea autoFocus style={styles.reviewInput} value={reviewText} onChange={(event) => setReviewText(event.target.value)} placeholder={composerMode === "photo" ? "리뷰를 남겨보세요 (선택)" : "카페에서의 경험을 남겨주세요 (선택)"} />
             {reviewImages.length > 0 && <div style={styles.reviewImagePreviewRow}>{reviewImages.map(({ url }, index) => <img key={url} src={url} alt={`첨부 사진 ${index + 1}`} style={styles.reviewImagePreview} />)}</div>}
             <div style={styles.reviewComposerActions}>
               <label style={styles.photoAttachBtn}>사진 첨부<input type="file" accept="image/*" multiple onChange={handleReviewImages} style={{ display: "none" }} /></label>
-              <button type="button" style={{ ...styles.reviewSubmitBtn, opacity: reviewText.trim() || reviewImages.length ? 1 : 0.45 }} onClick={submitReview} disabled={!reviewText.trim() && reviewImages.length === 0}>리뷰 등록</button>
+              <button type="button" style={{ ...styles.reviewSubmitBtn, opacity: reviewText.trim() || reviewImages.length ? 1 : 0.45 }} onClick={submitReview} disabled={!reviewText.trim() && reviewImages.length === 0}>{composerMode === "photo" ? "사진 등록" : "리뷰 등록"}</button>
             </div>
           </div>
+        </div>
+      )}
+      {selectedPhotoIndex !== null && (
+        <div style={styles.photoViewerOverlay} onClick={() => setSelectedPhotoIndex(null)}>
+          <button type="button" style={styles.photoViewerClose} onClick={() => setSelectedPhotoIndex(null)} aria-label="사진 닫기">×</button>
+          {reviewPhotoList.length > 1 && (
+            <button type="button" style={{ ...styles.photoViewerNav, ...styles.photoViewerPrev }} onClick={(event) => { event.stopPropagation(); setSelectedPhotoIndex((selectedPhotoIndex - 1 + reviewPhotoList.length) % reviewPhotoList.length); }} aria-label="이전 사진">‹</button>
+          )}
+          <img src={reviewPhotoList[selectedPhotoIndex]} alt={`카페 리뷰 사진 ${selectedPhotoIndex + 1}`} style={styles.photoViewerImage} onClick={(event) => event.stopPropagation()} />
+          {reviewPhotoList.length > 1 && (
+            <button type="button" style={{ ...styles.photoViewerNav, ...styles.photoViewerNext }} onClick={(event) => { event.stopPropagation(); setSelectedPhotoIndex((selectedPhotoIndex + 1) % reviewPhotoList.length); }} aria-label="다음 사진">›</button>
+          )}
+          <span style={styles.photoViewerCount}>{selectedPhotoIndex + 1} / {reviewPhotoList.length}</span>
         </div>
       )}
     </div>
@@ -776,6 +901,7 @@ function CafeForm({ pickedLoc, onCancel, onSubmit, mapStatus, onSetLoc }) {
   const [useIndividualHours, setUseIndividualHours] = useState(false);
   const [showSchedule, setShowSchedule] = useState(false);
   const [desc, setDesc] = useState("");
+  const [outletRange, setOutletRange] = useState(null);
   const [tags, setTags] = useState({ outlet: false, large: false, interior: false, parking: false, cute: false });
   const [geocoding, setGeocoding] = useState(false);
   const [geocodeFailed, setGeocodeFailed] = useState(false);
@@ -785,7 +911,7 @@ function CafeForm({ pickedLoc, onCancel, onSubmit, mapStatus, onSetLoc }) {
   const dongRef = useRef(dong);
   dongRef.current = dong;
 
-  const canSubmit = name.trim() && address.trim();
+  const canSubmit = name.trim() && address.trim() && outletRange;
 
   const setSchedulePreset = (preset) => {
     setWeeklyHours((current) => Object.fromEntries(DAYS.map(({ key }) => [key, {
@@ -947,8 +1073,20 @@ function CafeForm({ pickedLoc, onCancel, onSubmit, mapStatus, onSetLoc }) {
           </label>
         </div>
 
+        <div style={styles.outletField}>
+          <span style={styles.outletFieldLabel}>콘센트 있는 좌석 수 (대략) *</span>
+          <div style={styles.outletRangeGrid}>
+            {OUTLET_RANGES.map(({ value, label }) => (
+              <label key={value} style={{ ...styles.outletRangeOption, ...(outletRange === value ? styles.outletRangeOptionActive : {}) }}>
+                <input type="radio" name="outletRange" value={value} checked={outletRange === value} onChange={() => setOutletRange(value)} style={styles.visuallyHiddenInput} />
+                {label}
+              </label>
+            ))}
+          </div>
+        </div>
+
         <div style={styles.tagCheckRow}>
-          {FILTERS.map(({ key, label, icon: Icon }) => (
+          {FILTERS.filter(({ key }) => key !== "outlet").map(({ key, label, icon: Icon }) => (
             <label key={key} style={{ ...styles.tagCheck, ...(tags[key] ? styles.tagCheckActive : {}) }}>
               <input
                 type="checkbox"
@@ -967,7 +1105,7 @@ function CafeForm({ pickedLoc, onCancel, onSubmit, mapStatus, onSetLoc }) {
           <button
             style={{ ...styles.submitBtn, opacity: canSubmit ? 1 : 0.45, cursor: canSubmit ? "pointer" : "not-allowed" }}
             disabled={!canSubmit}
-            onClick={() => canSubmit && onSubmit({ name, dong, address, seats, weeklyHours: getSubmittedWeeklyHours(), desc, tags })}
+            onClick={() => canSubmit && onSubmit({ name, dong, address, seats, weeklyHours: getSubmittedWeeklyHours(), desc, tags: { ...tags, outlet: outletRange !== "none" }, outletRange })}
           >
             등록하기
           </button>
@@ -1258,6 +1396,8 @@ const styles = {
     scrollSnapType: "x proximity",
     WebkitOverflowScrolling: "touch",
     scrollbarWidth: "none",
+    cursor: "grab",
+    userSelect: "none",
   },
   filterBarFade: {
     position: "absolute",
@@ -1268,6 +1408,11 @@ const styles = {
     background: `linear-gradient(to right, transparent, ${COLOR.bg})`,
     pointerEvents: "none",
   },
+  outletFilterMenu: { position: "absolute", top: "calc(100% + 6px)", left: 16, zIndex: 20, width: 250, padding: 12, borderRadius: 12, border: `1px solid ${COLOR.border}`, background: COLOR.surface, boxShadow: "0 8px 20px rgba(38,36,31,0.16)" },
+  outletFilterTitle: { display: "block", marginBottom: 9, color: COLOR.ink, fontSize: 12.5 },
+  outletFilterOptions: { display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 7 },
+  outletFilterOption: { minHeight: 40, padding: "0 7px", borderRadius: 8, border: `1px solid ${COLOR.border}`, background: COLOR.surface, color: COLOR.inkSoft, fontSize: 12, fontWeight: 600, cursor: "pointer", touchAction: "manipulation" },
+  outletFilterOptionActive: { borderColor: COLOR.accent, background: COLOR.accentSoft, color: COLOR.accent },
   filterChip: { display: "flex", alignItems: "center", gap: 6, padding: "8px 13px", borderRadius: 999, border: `1px solid ${COLOR.border}`, background: COLOR.surface, color: COLOR.ink, fontSize: 13, fontWeight: 500, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0, scrollSnapAlign: "start" },
   filterChipActive: { background: COLOR.accent, borderColor: COLOR.accent, color: "#FFFDF8" },
   resetBtn: { padding: "8px 10px", borderRadius: 999, border: "none", background: "transparent", color: COLOR.inkSoft, fontSize: 12, textDecoration: "underline", cursor: "pointer", flexShrink: 0 },
@@ -1306,6 +1451,9 @@ const styles = {
   detailInfoLabel: { display: "block", marginBottom: 3, color: COLOR.inkSoft, fontSize: 11.5 },
   naverMapLink: { display: "block", margin: "0 0 16px", color: COLOR.teal, fontSize: 11.5, fontWeight: 600, textAlign: "right", textDecoration: "underline", textUnderlineOffset: 3 },
   reviewSection: { borderTop: `1px solid ${COLOR.border}`, paddingTop: 15 },
+  detailTabs: { display: "flex", gap: 4, marginBottom: 15, borderBottom: `1px solid ${COLOR.border}` },
+  detailTab: { flex: 1, minHeight: 44, padding: "0 8px", border: "none", borderBottom: "2px solid transparent", background: "transparent", color: COLOR.inkSoft, fontSize: 13, fontWeight: 600, cursor: "pointer", touchAction: "manipulation" },
+  detailTabActive: { borderBottomColor: COLOR.ink, color: COLOR.ink },
   reviewSectionHeader: { display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8, marginBottom: 9 },
   reviewTitle: { margin: 0, fontSize: 16, fontWeight: 700, fontFamily: "'Noto Serif KR', serif" },
   writeReviewBtn: { minHeight: 38, padding: "0 12px", border: `1px solid ${COLOR.teal}`, borderRadius: 8, background: COLOR.tealSoft, color: COLOR.teal, fontSize: 12, fontWeight: 600, cursor: "pointer", touchAction: "manipulation" },
@@ -1332,9 +1480,22 @@ const styles = {
   reviewImageGrid: { display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 5 },
   reviewImage: { width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 7 },
   photoGallerySection: { marginTop: 16, paddingTop: 15, borderTop: `1px solid ${COLOR.border}` },
+  photoGalleryHeader: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 9 },
+  addPhotoBtn: { width: 40, height: 40, padding: 0, border: `1px solid ${COLOR.border}`, borderRadius: 10, background: COLOR.surface, color: COLOR.teal, fontSize: 27, fontWeight: 400, lineHeight: 1, cursor: "pointer", touchAction: "manipulation" },
   photoGallery: { display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 6, marginTop: 9 },
+  galleryImageButton: { display: "block", minWidth: 0, padding: 0, border: "none", background: "transparent", cursor: "zoom-in" },
   galleryImage: { width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 8 },
+  emptyPhotoState: { display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: 170, padding: 16, borderRadius: 12, border: `1px dashed ${COLOR.border}`, background: "#FAF8F0" },
   emptyPhotoText: { margin: "8px 0 0", color: COLOR.inkSoft, fontSize: 12 },
+  centerUploadBtn: { display: "flex", alignItems: "center", gap: 7, minHeight: 48, marginTop: 12, padding: "0 18px", border: "none", borderRadius: 10, background: COLOR.teal, color: "#FFFDF8", fontSize: 13, fontWeight: 600, cursor: "pointer", touchAction: "manipulation" },
+  uploadPlus: { fontSize: 22, fontWeight: 300, lineHeight: 1 },
+  photoViewerOverlay: { position: "fixed", inset: 0, zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(10,10,10,0.94)" },
+  photoViewerImage: { maxWidth: "calc(100vw - 96px)", maxHeight: "calc(100vh - 100px)", objectFit: "contain", userSelect: "none" },
+  photoViewerClose: { position: "absolute", top: 16, right: 16, zIndex: 1, width: 44, height: 44, border: "none", borderRadius: 22, background: "rgba(255,255,255,0.14)", color: "#FFFDF8", fontSize: 29, lineHeight: 1, cursor: "pointer" },
+  photoViewerNav: { position: "absolute", top: "50%", zIndex: 1, width: 48, height: 64, marginTop: -32, border: "none", borderRadius: 10, background: "rgba(255,255,255,0.16)", color: "#FFFDF8", fontSize: 42, lineHeight: 1, cursor: "pointer" },
+  photoViewerPrev: { left: 16 },
+  photoViewerNext: { right: 16 },
+  photoViewerCount: { position: "absolute", bottom: 18, left: 0, right: 0, color: "#FFFDF8", fontSize: 12, textAlign: "center" },
   modalOverlay: { position: "fixed", inset: 0, background: "rgba(38,36,31,0.5)", display: "flex", alignItems: "flex-end", justifyContent: "center", zIndex: 50 },
   modal: { background: COLOR.surface, borderRadius: "18px 18px 0 0", padding: "22px 20px", maxWidth: 480, width: "100%", maxHeight: "88vh", overflowY: "auto" },
   modalTitle: { margin: "0 0 6px", fontFamily: "'Noto Serif KR', serif", fontSize: 20, fontWeight: 700 },
@@ -1359,6 +1520,12 @@ const styles = {
   tagCheckRow: { display: "flex", flexWrap: "wrap", gap: 8, margin: "16px 0 4px" },
   tagCheck: { display: "flex", alignItems: "center", gap: 6, padding: "7px 12px", borderRadius: 999, border: `1px solid ${COLOR.border}`, fontSize: 12.5, cursor: "pointer", color: COLOR.ink },
   tagCheckActive: { background: COLOR.teal, borderColor: COLOR.teal, color: "#FFFDF8" },
+  outletField: { gridColumn: "1 / -1", display: "flex", flexDirection: "column", gap: 7, marginTop: 2 },
+  outletFieldLabel: { color: COLOR.inkSoft, fontSize: 12.5, fontWeight: 500 },
+  outletRangeGrid: { display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 7 },
+  outletRangeOption: { display: "flex", alignItems: "center", justifyContent: "center", minHeight: 44, padding: "0 5px", borderRadius: 9, border: `1px solid ${COLOR.border}`, background: COLOR.surface, color: COLOR.inkSoft, fontSize: 12, fontWeight: 600, textAlign: "center", cursor: "pointer", touchAction: "manipulation" },
+  outletRangeOptionActive: { borderColor: COLOR.teal, background: COLOR.tealSoft, color: COLOR.teal },
+  visuallyHiddenInput: { position: "absolute", opacity: 0, pointerEvents: "none" },
   weeklyHoursBox: { display: "flex", flexDirection: "column", gap: 7, padding: "10px 12px", borderRadius: 10, border: `1px solid ${COLOR.border}`, background: "#FAF8F0" },
   commonHoursRow: { display: "flex", alignItems: "center", gap: 6, paddingBottom: 8, borderBottom: `1px solid ${COLOR.border}`, color: COLOR.inkSoft, fontSize: 12 },
   commonHoursLabel: { width: 42, color: COLOR.ink, fontWeight: 600 },
