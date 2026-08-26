@@ -1,0 +1,1382 @@
+import React, { useState, useMemo, useRef, useEffect, useCallback } from "react";
+
+/* =========================================================================
+   네이버 지도 연동 안내
+   1) https://www.ncloud.com -> Console -> AI·NAVER API -> Maps 신청
+   2) 발급받은 "Client ID"를 아래 NAVER_CONFIG.clientId 에 붙여넣으세요
+   3) 콘솔에서 서비스 URL(도메인)에 이 앱이 배포될 주소를 등록해야 정상 동작해요
+   4) clientId가 비어있으면 자동으로 목업(일러스트) 지도로 대체됩니다
+   ========================================================================= */
+const NAVER_CONFIG = {
+  clientId: "tkv9djbq39",
+};
+
+/* 목업 지도용 좌표 변환 기준 박스 (마포구 연남·합정·망원·상수 일대 근사치) */
+const BOUNDS = { minLat: 37.541, maxLat: 37.560, minLng: 126.905, maxLng: 126.925 };
+function latLngToXY(lat, lng) {
+  const x = ((lng - BOUNDS.minLng) / (BOUNDS.maxLng - BOUNDS.minLng)) * 92 + 4;
+  const y = (1 - (lat - BOUNDS.minLat) / (BOUNDS.maxLat - BOUNDS.minLat)) * 92 + 4;
+  return { x, y };
+}
+
+/* ---------- 초기 목업 데이터 (실좌표 포함) ---------- */
+const INITIAL_CAFES = [
+  { id: 1, name: "브루웍스 연남", dong: "연남동", address: "연남동 227-3",
+    tags: { outlet: true, large: true, interior: true, parking: false, cute: false },
+    seats: 68, rating: 4.6, hours: "08:00 - 23:00",
+    desc: "층고가 높은 창고형 공간, 2층 전체가 스터디존",
+    lat: 37.5599, lng: 126.9255 },
+  { id: 2, name: "카페 소슬", dong: "합정동", address: "합정동 371-12",
+    tags: { outlet: true, large: false, interior: true, parking: true, cute: true },
+    seats: 22, rating: 4.8, hours: "10:00 - 22:00",
+    desc: "작지만 자리마다 콘센트 완비, 조용한 분위기",
+    lat: 37.5495, lng: 126.9135 },
+  { id: 3, name: "그로브 하우스", dong: "망원동", address: "망원동 402-1",
+    tags: { outlet: false, large: true, interior: true, parking: true, cute: false },
+    seats: 90, rating: 4.4, hours: "09:00 - 24:00",
+    desc: "식물이 가득한 온실 컨셉, 사진 찍기 좋은 곳",
+    lat: 37.5555, lng: 126.9020 },
+  { id: 4, name: "스터디 앤 빈", dong: "연남동", address: "연남동 340-5",
+    tags: { outlet: true, large: true, interior: false, parking: false, cute: false },
+    seats: 74, rating: 4.3, hours: "24시간",
+    desc: "전 좌석 콘센트, 스터디카페에 가까운 실용적 공간",
+    lat: 37.5615, lng: 126.9245 },
+  { id: 5, name: "아뜰리에 문", dong: "상수동", address: "상수동 12-4",
+    tags: { outlet: false, large: false, interior: true, parking: false, cute: true },
+    seats: 18, rating: 4.9, hours: "11:00 - 21:00",
+    desc: "갤러리 같은 인테리어, 원목 소품이 인상적",
+    lat: 37.5478, lng: 126.9225 },
+  { id: 6, name: "파크뷰 로스터리", dong: "망원동", address: "망원동 55-9",
+    tags: { outlet: true, large: true, interior: true, parking: true, cute: false },
+    seats: 110, rating: 4.5, hours: "08:30 - 22:30",
+    desc: "공원 앞 대형 로스터리 카페, 주차 20대 가능",
+    lat: 37.5545, lng: 126.9005 },
+  { id: 7, name: "카페 온기", dong: "합정동", address: "합정동 158-2",
+    tags: { outlet: true, large: false, interior: false, parking: true, cute: true },
+    seats: 26, rating: 4.1, hours: "09:00 - 21:00",
+    desc: "동네 단골이 많은 조용한 로컬 카페",
+    lat: 37.5502, lng: 126.9150 },
+  { id: 8, name: "라이트룸", dong: "연남동", address: "연남동 190-7",
+    tags: { outlet: true, large: false, interior: true, parking: false, cute: true },
+    seats: 30, rating: 4.7, hours: "10:00 - 23:00",
+    desc: "채광이 좋은 통유리 공간, 오후엔 대기줄 있음",
+    lat: 37.5605, lng: 126.9270 },
+  { id: 9, name: "베이스캠프 커피", dong: "상수동", address: "상수동 88-1",
+    tags: { outlet: true, large: true, interior: false, parking: true, cute: false },
+    seats: 82, rating: 4.2, hours: "07:00 - 23:00",
+    desc: "노트북 작업하는 사람들이 많은 넓은 좌석 배치",
+    lat: 37.5468, lng: 126.9210 },
+];
+
+const FILTERS = [
+  { key: "outlet", label: "콘센트", icon: OutletIcon },
+  { key: "large", label: "대형카페", icon: BuildingIcon },
+  { key: "interior", label: "인테리어", icon: SparkleIcon },
+  { key: "cute", label: "아기자기함", icon: CuteIcon },
+  { key: "parking", label: "주차가능", icon: ParkingIcon },
+];
+
+const DAYS = [
+  { key: "mon", label: "월" }, { key: "tue", label: "화" }, { key: "wed", label: "수" },
+  { key: "thu", label: "목" }, { key: "fri", label: "금" }, { key: "sat", label: "토" }, { key: "sun", label: "일" },
+];
+
+const DEFAULT_WEEKLY_HOURS = Object.fromEntries(
+  DAYS.map(({ key }) => [key, { closed: false, open: "09:00", close: "22:00" }])
+);
+
+function weeklyHoursSummary(weeklyHours) {
+  if (!weeklyHours) return null;
+  const openDays = DAYS.filter(({ key }) => !weeklyHours[key]?.closed);
+  if (openDays.length === 0) return "매일 휴무";
+  const first = weeklyHours[openDays[0].key];
+  const sameHours = openDays.every(({ key }) => {
+    const day = weeklyHours[key];
+    return day.open === first.open && day.close === first.close;
+  });
+  if (openDays.length === DAYS.length && sameHours) return `${first.open} - ${first.close}`;
+  return `${openDays.map(({ label }) => label).join(",")} ${sameHours ? `${first.open} - ${first.close}` : "영업"}`;
+}
+
+function todayKey() {
+  return DAYS[(new Date().getDay() + 6) % 7].key;
+}
+
+/* 운영시간 문자열("HH:MM - HH:MM" 또는 "24시간")을 현재 시각과 비교 */
+function isOpenNow(hoursStr, weeklyHours) {
+  if (weeklyHours) {
+    const today = weeklyHours[todayKey()];
+    if (!today || today.closed) return false;
+    hoursStr = `${today.open} - ${today.close}`;
+  }
+  if (!hoursStr) return null; // 정보 없음 -> 알 수 없음
+  if (hoursStr.includes("24시간")) return true;
+  const m = hoursStr.match(/(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})/);
+  if (!m) return null;
+  const sh = Number(m[1]), sm = Number(m[2]), eh = Number(m[3]), em = Number(m[4]);
+  const now = new Date();
+  const cur = now.getHours() * 60 + now.getMinutes();
+  const start = sh * 60 + sm;
+  const end = eh * 60 + em;
+  if (start === end) return true;
+  if (start < end) return cur >= start && cur < end;
+  return cur >= start || cur < end; // 자정을 넘기는 영업시간
+}
+
+/* ---------- 아이콘 ---------- */
+function OutletIcon({ size = 16, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <rect x="4" y="4" width="16" height="16" rx="3" stroke={color} strokeWidth="1.6" />
+      <line x1="9" y1="9" x2="9" y2="13" stroke={color} strokeWidth="1.6" strokeLinecap="round" />
+      <line x1="15" y1="9" x2="15" y2="13" stroke={color} strokeWidth="1.6" strokeLinecap="round" />
+      <path d="M12 15v3" stroke={color} strokeWidth="1.6" strokeLinecap="round" />
+    </svg>
+  );
+}
+function BuildingIcon({ size = 16, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <rect x="5" y="3" width="10" height="18" rx="1" stroke={color} strokeWidth="1.6" />
+      <rect x="15" y="9" width="5" height="12" rx="1" stroke={color} strokeWidth="1.6" />
+      <line x1="8" y1="7" x2="8" y2="7.01" stroke={color} strokeWidth="2" strokeLinecap="round" />
+      <line x1="12" y1="7" x2="12" y2="7.01" stroke={color} strokeWidth="2" strokeLinecap="round" />
+      <line x1="8" y1="11" x2="8" y2="11.01" stroke={color} strokeWidth="2" strokeLinecap="round" />
+      <line x1="12" y1="11" x2="12" y2="11.01" stroke={color} strokeWidth="2" strokeLinecap="round" />
+      <line x1="8" y1="15" x2="8" y2="15.01" stroke={color} strokeWidth="2" strokeLinecap="round" />
+      <line x1="12" y1="15" x2="12" y2="15.01" stroke={color} strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  );
+}
+function SparkleIcon({ size = 16, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <path d="M12 3l1.8 5.4L19 10l-5.2 1.6L12 17l-1.8-5.4L5 10l5.2-1.6L12 3z" stroke={color} strokeWidth="1.4" strokeLinejoin="round" />
+      <path d="M19 15l0.7 2 2 0.7-2 0.7-0.7 2-0.7-2-2-0.7 2-0.7 0.7-2z" stroke={color} strokeWidth="1.1" strokeLinejoin="round" />
+    </svg>
+  );
+}
+function ParkingIcon({ size = 16, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <rect x="4" y="4" width="16" height="16" rx="3" stroke={color} strokeWidth="1.6" />
+      <path d="M10 16V8h3.2a2.3 2.3 0 010 4.6H10" stroke={color} strokeWidth="1.6" strokeLinejoin="round" />
+    </svg>
+  );
+}
+function ClockIcon({ size = 16, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <circle cx="12" cy="12" r="8.5" stroke={color} strokeWidth="1.6" />
+      <path d="M12 7.5V12l3 2" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+function CuteIcon({ size = 16, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <path
+        d="M12 20s-7-4.4-9.5-9C.9 7.8 2.4 4.8 5.4 4.2c1.9-.4 3.8.5 5 2 1.2-1.5 3.1-2.4 5-2 3 .6 4.5 3.6 2.9 6.8C19 15.6 12 20 12 20z"
+        stroke={color}
+        strokeWidth="1.6"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+function SearchIcon({ size = 16, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <circle cx="11" cy="11" r="7" stroke={color} strokeWidth="1.8" />
+      <line x1="16.2" y1="16.2" x2="21" y2="21" stroke={color} strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  );
+}
+function PinIcon({ size = 30, filled, color }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 30 38" fill="none">
+      <path
+        d="M15 1C7.8 1 2 6.8 2 14c0 9.6 11.3 21.6 12 22.3.5.5 1.2.5 1.8 0C16.6 35.6 28 23.6 28 14 28 6.8 22.2 1 15 1z"
+        fill={filled ? color : "#FFFDF8"}
+        stroke={color}
+        strokeWidth="2"
+      />
+      <circle cx="15" cy="14" r="5.2" fill={filled ? "#FFFDF8" : color} />
+    </svg>
+  );
+}
+function pinDataUrl(color, filled) {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="30" height="38" viewBox="0 0 30 38">
+    <path d="M15 1C7.8 1 2 6.8 2 14c0 9.6 11.3 21.6 12 22.3.5.5 1.2.5 1.8 0C16.6 35.6 28 23.6 28 14 28 6.8 22.2 1 15 1z" fill="${filled ? color : "#FFFDF8"}" stroke="${color}" stroke-width="2"/>
+    <circle cx="15" cy="14" r="5.2" fill="${filled ? "#FFFDF8" : color}"/>
+  </svg>`;
+  return "data:image/svg+xml;charset=UTF-8," + encodeURIComponent(svg);
+}
+
+/* ---------- 네이버 지도 스크립트 로더 ---------- */
+function useNaverMapsScript(clientId) {
+  const [status, setStatus] = useState(clientId ? "loading" : "unavailable");
+  useEffect(() => {
+    if (!clientId) {
+      setStatus("unavailable");
+      return;
+    }
+    try {
+      if (window.naver && window.naver.maps) {
+        setStatus("ready");
+        return;
+      }
+      const timeoutId = setTimeout(() => {
+        setStatus((s) => (s === "loading" ? "error" : s));
+      }, 6000);
+
+      const existing = document.getElementById("naver-maps-sdk");
+      if (existing) {
+        existing.addEventListener("load", () => { clearTimeout(timeoutId); setStatus("ready"); });
+        existing.addEventListener("error", () => { clearTimeout(timeoutId); setStatus("error"); });
+        return () => clearTimeout(timeoutId);
+      }
+      const script = document.createElement("script");
+      script.id = "naver-maps-sdk";
+      script.src = `https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=${clientId}&submodules=geocoder`;
+      script.async = true;
+      script.onload = () => { clearTimeout(timeoutId); setStatus("ready"); };
+      script.onerror = () => { clearTimeout(timeoutId); setStatus("error"); };
+      document.head.appendChild(script);
+      return () => clearTimeout(timeoutId);
+    } catch (e) {
+      setStatus("error");
+    }
+  }, [clientId]);
+  return status; // "unavailable" | "loading" | "ready" | "error"
+}
+
+/* ---------- 다음(카카오) 우편번호 서비스 스크립트 로더 - 주소 검색 팝업용, API 키 불필요 ---------- */
+function useDaumPostcodeScript() {
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    if (window.daum && window.daum.Postcode) {
+      setReady(true);
+      return;
+    }
+    const existing = document.getElementById("daum-postcode-sdk");
+    if (existing) {
+      existing.addEventListener("load", () => setReady(true));
+      return;
+    }
+    const script = document.createElement("script");
+    script.id = "daum-postcode-sdk";
+    script.src = "https://t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js";
+    script.async = true;
+    script.onload = () => setReady(true);
+    script.onerror = () => console.error("주소 검색 스크립트 로드 실패");
+    document.head.appendChild(script);
+  }, []);
+  return ready;
+}
+
+/* 네이버 지오코딩 - 주소 문자열을 좌표로 변환 (submodules=geocoder 필요) */
+function geocodeAddress(address, callback) {
+  if (!window.naver || !window.naver.maps || !window.naver.maps.Service) {
+    callback(null);
+    return;
+  }
+  try {
+    window.naver.maps.Service.geocode({ query: address }, (status, response) => {
+      if (status !== window.naver.maps.Service.Status.OK) {
+        callback(null);
+        return;
+      }
+      const items = response.v2.addresses;
+      if (!items || items.length === 0) {
+        callback(null);
+        return;
+      }
+      callback({ lat: Number(items[0].y), lng: Number(items[0].x) });
+    });
+  } catch (e) {
+    console.error("지오코딩 실패:", e);
+    callback(null);
+  }
+}
+
+function useIsMobile(breakpoint = 768) {
+  const [isMobile, setIsMobile] = useState(
+    typeof window !== "undefined" ? window.innerWidth <= breakpoint : false
+  );
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth <= breakpoint);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, [breakpoint]);
+  return isMobile;
+}
+
+function useGlobalErrorCapture() {
+  const [error, setError] = useState(null);
+  useEffect(() => {
+    const onError = (e) => {
+      console.error("전역 에러 포착:", e.error || e.message);
+      setError(e.error instanceof Error ? e.error : new Error(String(e.message || "알 수 없는 오류")));
+    };
+    const onRejection = (e) => {
+      console.error("처리되지 않은 Promise 거부:", e.reason);
+      setError(e.reason instanceof Error ? e.reason : new Error(String(e.reason)));
+    };
+    window.addEventListener("error", onError);
+    window.addEventListener("unhandledrejection", onRejection);
+    return () => {
+      window.removeEventListener("error", onError);
+      window.removeEventListener("unhandledrejection", onRejection);
+    };
+  }, []);
+  return error;
+}
+
+function ErrorFallback({ error }) {
+  return (
+    <div style={{ fontFamily: "sans-serif", padding: 24, background: "#FBEAE5", color: "#7A2E1F", minHeight: "100vh" }}>
+      <h2 style={{ marginTop: 0 }}>화면 렌더링 중 오류가 발생했어요</h2>
+      <pre style={{ whiteSpace: "pre-wrap", fontSize: 13, background: "#FFFDF8", padding: 12, borderRadius: 8 }}>
+        {String(error && error.message ? error.message : error)}
+      </pre>
+      <p style={{ fontSize: 12.5 }}>이 메시지를 그대로 알려주시면 바로 고칠게요.</p>
+    </div>
+  );
+}
+
+/* ---------- 에러 바운더리 (React 렌더링 중 오류를 흰 화면 대신 표시) ---------- */
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { error: null };
+  }
+  static getDerivedStateFromError(error) {
+    return { error };
+  }
+  render() {
+    if (this.state.error) {
+      return <ErrorFallback error={this.state.error} />;
+    }
+    return this.props.children;
+  }
+}
+
+/* ---------- 메인 컴포넌트 ---------- */
+function CafeFinderInner() {
+  const [cafes, setCafes] = useState(INITIAL_CAFES);
+  const [active, setActive] = useState(new Set());
+  const [selected, setSelected] = useState(null);
+  const [detailCafeId, setDetailCafeId] = useState(null);
+  const [hovered, setHovered] = useState(null);
+  const [showForm, setShowForm] = useState(false);
+  const [pickedLoc, setPickedLoc] = useState(null); // {lat,lng} 지도 클릭으로 지정
+  const cardRefs = useRef({});
+  const [mobileTab, setMobileTab] = useState("map");
+  const [queryInput, setQueryInput] = useState("");
+  const [query, setQuery] = useState("");
+  const [openNowOnly, setOpenNowOnly] = useState(false);
+
+  const mapStatus = useNaverMapsScript(NAVER_CONFIG.clientId);
+
+  const toggleFilter = (key) => {
+    setActive((prev) => {
+      const next = new Set(prev);
+      next.has(key) ? next.delete(key) : next.add(key);
+      return next;
+    });
+  };
+
+  const filtered = useMemo(() => {
+    let list = cafes;
+    if (active.size > 0) {
+      list = list.filter((c) => [...active].every((k) => c.tags[k]));
+    }
+    if (openNowOnly) {
+      list = list.filter((c) => isOpenNow(c.hours) === true);
+    }
+    const q = query.trim().toLowerCase();
+    if (q) {
+      list = list.filter((c) =>
+        [c.name, c.dong, c.address, c.desc].some((v) => v.toLowerCase().includes(q))
+      );
+    }
+    return list;
+  }, [active, cafes, query, openNowOnly]);
+
+  const selectCafe = (id) => {
+    setSelected(id);
+    setDetailCafeId(id);
+  };
+
+  const handleMapClickForForm = useCallback((lat, lng) => {
+    setPickedLoc({ lat, lng });
+  }, []);
+
+  const submitCafe = (data) => {
+    const loc = pickedLoc || { lat: 37.5535, lng: 126.914 }; // 위치 미지정 시 동네 중앙 기본값
+    const newCafe = {
+      id: Date.now(),
+      name: data.name,
+      dong: data.dong,
+      address: data.address,
+      tags: data.tags,
+      seats: Number(data.seats) || 0,
+      rating: 0,
+      hours: weeklyHoursSummary(data.weeklyHours) || "정보 없음",
+      weeklyHours: data.weeklyHours,
+      desc: data.desc,
+      lat: loc.lat,
+      lng: loc.lng,
+    };
+    setCafes((prev) => [newCafe, ...prev]);
+    setShowForm(false);
+    setPickedLoc(null);
+    selectCafe(newCafe.id);
+  };
+
+  const addReview = (cafeId, review) => {
+    setCafes((prev) => prev.map((cafe) => cafe.id === cafeId
+      ? { ...cafe, reviews: [...(cafe.reviews || []), review] }
+      : cafe));
+  };
+
+  const selectedCafe = cafes.find((c) => c.id === selected) || null;
+  const detailCafe = cafes.find((c) => c.id === detailCafeId) || null;
+
+  return (
+    <div style={styles.appOuter}>
+      <div style={styles.appShell}>
+      <style>{FONT_IMPORT}</style>
+
+      <header style={styles.header}>
+        <div>
+          <p style={styles.eyebrow}>공부하기 좋은 동네 카페</p>
+          <h1 style={styles.title}>카페 찾기</h1>
+        </div>
+        <button style={styles.addBtn} onClick={() => { setPickedLoc(null); setShowForm(true); }}>
+          + 카페 등록
+        </button>
+      </header>
+
+      <div style={styles.searchBar}>
+        <SearchIcon size={16} color={COLOR.inkSoft} />
+        <input
+          style={styles.searchInput}
+          value={queryInput}
+          onChange={(e) => setQueryInput(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              setActive(new Set());
+              setOpenNowOnly(false);
+              setQuery(queryInput.trim());
+            }
+          }}
+          placeholder="카페 이름, 동네로 검색 후 Enter"
+        />
+        {queryInput && (
+          <button
+            style={styles.searchClearBtn}
+            onClick={() => { setQueryInput(""); setQuery(""); }}
+            aria-label="검색어 지우기"
+          >
+            ✕
+          </button>
+        )}
+      </div>
+
+      <div style={styles.filterBarWrap}>
+        <div style={styles.filterBar} className="cf-filterbar">
+          <button
+            onClick={() => setOpenNowOnly((v) => !v)}
+            style={{ ...styles.filterChip, ...(openNowOnly ? styles.filterChipActive : {}) }}
+          >
+            <ClockIcon size={15} color={openNowOnly ? "#FFFDF8" : "#5B5648"} />
+            지금 영업중
+          </button>
+          {FILTERS.map(({ key, label, icon: Icon }) => {
+            const isActive = active.has(key);
+            return (
+              <button
+                key={key}
+                onClick={() => toggleFilter(key)}
+                style={{ ...styles.filterChip, ...(isActive ? styles.filterChipActive : {}) }}
+              >
+                <Icon size={15} color={isActive ? "#FFFDF8" : "#5B5648"} />
+                {label}
+              </button>
+            );
+          })}
+          {(active.size > 0 || openNowOnly) && (
+            <button onClick={() => { setActive(new Set()); setOpenNowOnly(false); }} style={styles.resetBtn}>초기화</button>
+          )}
+        </div>
+        <div style={styles.filterBarFade} />
+      </div>
+
+      {mapStatus !== "ready" && (
+        <div style={styles.mapNotice}>
+          {NAVER_CONFIG.clientId
+            ? "네이버 지도를 불러오는 중이거나 연결에 실패했어요. 지금은 목업 지도로 표시됩니다."
+            : "네이버 지도 Client ID가 설정되지 않아 목업 지도로 표시 중이에요. 코드 상단 NAVER_CONFIG.clientId를 채우면 실제 지도로 전환돼요."}
+        </div>
+      )}
+
+      <div style={styles.mobileTabBar}>
+        <button
+          style={{ ...styles.mobileTabBtn, ...(mobileTab === "map" ? styles.mobileTabBtnActive : {}) }}
+          onClick={() => setMobileTab("map")}
+        >
+          지도
+        </button>
+        <button
+          style={{ ...styles.mobileTabBtn, ...(mobileTab === "list" ? styles.mobileTabBtnActive : {}) }}
+          onClick={() => setMobileTab("list")}
+        >
+          목록 ({filtered.length})
+        </button>
+      </div>
+
+      <div style={styles.mainMobile}>
+        {mobileTab === "list" && (
+          <div style={styles.listPaneMobile}>
+            {filtered.length === 0 && (
+              <div style={styles.emptyState}>
+                {query ? `'${query}'에 맞는 카페가 없어요.` : "조건에 맞는 카페가 없어요. 필터를 줄여보세요."}
+              </div>
+            )}
+            {filtered.map((c) => (
+              <div
+                key={c.id}
+                ref={(el) => (cardRefs.current[c.id] = el)}
+                onClick={() => selectCafe(c.id)}
+                style={{ ...styles.card, ...(selected === c.id ? styles.cardSelected : {}) }}
+              >
+                <div style={styles.cardTop}>
+                  <div>
+                    <h3 style={styles.cardTitle}>{c.name}</h3>
+                    <p style={styles.cardDong}>{c.dong} · {c.address}</p>
+                  </div>
+                  <div style={styles.rating}>{c.rating > 0 ? `★ ${c.rating}` : "신규 등록"}</div>
+                </div>
+                <p style={styles.cardDesc}>{c.desc}</p>
+                <div style={styles.badgeRow}>
+                  {FILTERS.filter((f) => c.tags[f.key]).map(({ key, label, icon: Icon }) => (
+                    <span key={key} style={styles.badge}>
+                      <Icon size={12} color="#3D6B5F" />
+                      {label}
+                    </span>
+                  ))}
+                </div>
+                <div style={styles.cardMeta}>
+                  좌석 {c.seats}석 · {c.hours}
+                  {isOpenNow(c.hours, c.weeklyHours) !== null && (
+                    <span style={isOpenNow(c.hours, c.weeklyHours) ? styles.openBadge : styles.closedBadge}>
+                      {isOpenNow(c.hours, c.weeklyHours) ? "영업중" : "영업종료"}
+                    </span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {mobileTab === "map" && (
+          <div style={styles.mapPaneMobile}>
+            {mapStatus === "ready" ? (
+              <NaverRealMap
+                cafes={filtered}
+                selected={selected}
+                hovered={hovered}
+                onSelect={selectCafe}
+                onHover={setHovered}
+                pickMode={showForm}
+                onPick={handleMapClickForForm}
+                pickedLoc={pickedLoc}
+              />
+            ) : (
+              <MockMapView
+                cafes={filtered}
+                selected={selected}
+                hovered={hovered}
+                onSelect={selectCafe}
+                onHover={setHovered}
+                pickMode={showForm}
+                onPick={handleMapClickForForm}
+                pickedLoc={pickedLoc}
+              />
+            )}
+
+          </div>
+        )}
+      </div>
+
+      {detailCafe && (
+        <CafeDetailModal cafe={detailCafe} onClose={() => setDetailCafeId(null)} onAddReview={addReview} />
+      )}
+
+      {showForm && (
+        <CafeForm
+          pickedLoc={pickedLoc}
+          onCancel={() => { setShowForm(false); setPickedLoc(null); }}
+          onSubmit={submitCafe}
+          mapStatus={mapStatus}
+          onSetLoc={(loc) => setPickedLoc(loc)}
+        />
+      )}
+      </div>
+    </div>
+  );
+}
+
+function CafeDetailModal({ cafe, onClose, onAddReview }) {
+  const openState = isOpenNow(cafe.hours, cafe.weeklyHours);
+  const naverMapUrl = `https://map.naver.com/v5/?c=${cafe.lng},${cafe.lat},15,0,0,0,dh`;
+  const reviewPhotoList = (cafe.reviews || []).flatMap((review) => review.images || []);
+  const [reviewText, setReviewText] = useState("");
+  const [reviewRating, setReviewRating] = useState(0);
+  const [reviewImages, setReviewImages] = useState([]);
+  const [showReviewComposer, setShowReviewComposer] = useState(false);
+
+  const handleReviewImages = (event) => {
+    const files = Array.from(event.target.files || []).slice(0, 5);
+    setReviewImages(files.map((file) => ({ file, url: URL.createObjectURL(file) })));
+  };
+
+  const submitReview = () => {
+    if (!reviewText.trim() && reviewImages.length === 0) return;
+    onAddReview(cafe.id, {
+      id: Date.now(),
+      rating: reviewRating,
+      text: reviewText.trim(),
+      images: reviewImages.map(({ url }) => url),
+      createdAt: new Date().toLocaleDateString("ko-KR"),
+    });
+    setReviewText("");
+    setReviewRating(0);
+    setReviewImages([]);
+    setShowReviewComposer(false);
+  };
+
+  return (
+    <div style={styles.detailOverlay} onClick={onClose}>
+      <div style={styles.detailModal} onClick={(event) => event.stopPropagation()}>
+        <div style={styles.detailHeader}>
+          <div>
+            <p style={styles.detailEyebrow}>카페 상세 정보</p>
+            <h2 style={styles.detailTitle}>{cafe.name}</h2>
+            <p style={styles.detailReviewCount}>리뷰 {cafe.reviews?.length || 0}개</p>
+          </div>
+          <button type="button" style={styles.detailCloseBtn} onClick={onClose} aria-label="상세 정보 닫기">×</button>
+        </div>
+        <p style={styles.detailAddress}>{cafe.dong} · {cafe.address}</p>
+        <div style={styles.badgeRow}>
+          {FILTERS.filter((filter) => cafe.tags[filter.key]).map(({ key, label, icon: Icon }) => (
+            <span key={key} style={styles.badge}><Icon size={12} color="#3D6B5F" />{label}</span>
+          ))}
+        </div>
+        <p style={styles.detailDescription}>{cafe.desc || "등록된 소개가 없습니다."}</p>
+        <div style={styles.detailInfoGrid}>
+          <div><span style={styles.detailInfoLabel}>영업시간</span><strong>{cafe.hours}</strong></div>
+          <div><span style={styles.detailInfoLabel}>상태</span><strong style={openState ? styles.openText : styles.closedText}>{openState === null ? "정보 없음" : openState ? "영업중" : "영업종료"}</strong></div>
+          <div><span style={styles.detailInfoLabel}>좌석</span><strong>{cafe.seats}석</strong></div>
+          <div><span style={styles.detailInfoLabel}>전화번호</span><strong>{cafe.phone || "등록된 번호 없음"}</strong></div>
+        </div>
+        <a href={naverMapUrl} target="_blank" rel="noreferrer" style={styles.naverMapLink}>네이버 지도에서 보기 ↗</a>
+        <section style={styles.reviewSection}>
+          <div style={styles.reviewSectionHeader}>
+            <h3 style={styles.reviewTitle}>리뷰</h3>
+            <button type="button" style={styles.writeReviewBtn} onClick={() => setShowReviewComposer(true)}>리뷰 남기기</button>
+          </div>
+          {(cafe.reviews || []).map((review) => (
+            <article key={review.id} style={styles.reviewItem}>
+              <div style={styles.reviewItemTop}><span style={styles.reviewStars}>{review.rating ? `${"★".repeat(review.rating)}${"☆".repeat(5 - review.rating)}` : "사진 리뷰"}</span><time style={styles.reviewDate}>{review.createdAt}</time></div>
+              {review.text && <p style={styles.reviewText}>{review.text}</p>}
+              {review.images?.length > 0 && <div style={styles.reviewImageGrid}>{review.images.map((image, index) => <img key={image} src={image} alt={`리뷰 사진 ${index + 1}`} style={styles.reviewImage} />)}</div>}
+            </article>
+          ))}
+          <div style={styles.photoGallerySection}>
+            <h3 style={styles.reviewTitle}>사진</h3>
+            {reviewPhotoList.length > 0 ? (
+              <div style={styles.photoGallery}>{reviewPhotoList.map((image, index) => <img key={`${image}-${index}`} src={image} alt={`카페 리뷰 사진 ${index + 1}`} style={styles.galleryImage} />)}</div>
+            ) : (
+              <p style={styles.emptyPhotoText}>아직 등록된 사진이 없습니다.</p>
+            )}
+          </div>
+        </section>
+      </div>
+      {showReviewComposer && (
+        <div style={styles.reviewOverlay} onClick={() => setShowReviewComposer(false)}>
+          <div style={styles.reviewModal} onClick={(event) => event.stopPropagation()}>
+            <div style={styles.reviewModalHeader}>
+              <h3 style={styles.reviewModalTitle}>리뷰 남기기</h3>
+              <button type="button" style={styles.reviewModalCloseBtn} onClick={() => setShowReviewComposer(false)} aria-label="리뷰 작성 닫기">×</button>
+            </div>
+            <p style={styles.reviewModalCafeName}>{cafe.name}</p>
+            <div style={styles.ratingPicker} aria-label="별점 선택">
+              {[1, 2, 3, 4, 5].map((rating) => (
+                <button key={rating} type="button" onClick={() => setReviewRating(rating)} style={{ ...styles.starButton, ...(rating <= reviewRating ? styles.starButtonActive : {}) }} aria-label={`${rating}점`}>★</button>
+              ))}
+            </div>
+            <textarea autoFocus style={styles.reviewInput} value={reviewText} onChange={(event) => setReviewText(event.target.value)} placeholder="카페에서의 경험을 남겨주세요" />
+            {reviewImages.length > 0 && <div style={styles.reviewImagePreviewRow}>{reviewImages.map(({ url }, index) => <img key={url} src={url} alt={`첨부 사진 ${index + 1}`} style={styles.reviewImagePreview} />)}</div>}
+            <div style={styles.reviewComposerActions}>
+              <label style={styles.photoAttachBtn}>사진 첨부<input type="file" accept="image/*" multiple onChange={handleReviewImages} style={{ display: "none" }} /></label>
+              <button type="button" style={{ ...styles.reviewSubmitBtn, opacity: reviewText.trim() || reviewImages.length ? 1 : 0.45 }} onClick={submitReview} disabled={!reviewText.trim() && reviewImages.length === 0}>리뷰 등록</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default function CafeFinder() {
+  const globalError = useGlobalErrorCapture();
+  if (globalError) return <ErrorFallback error={globalError} />;
+  return (
+    <ErrorBoundary>
+      <CafeFinderInner />
+    </ErrorBoundary>
+  );
+}
+
+function TimePicker({ value, onChange, label }) {
+  const handleChange = (event) => {
+    const digits = event.target.value.replace(/\D/g, "").slice(0, 4);
+    const nextValue = digits.length > 2 ? `${digits.slice(0, 2)}:${digits.slice(2)}` : digits;
+    onChange(nextValue);
+  };
+
+  return (
+    <div style={styles.timePicker} aria-label={label}>
+      <input
+        style={styles.timeTextInput}
+        type="text"
+        inputMode="numeric"
+        value={value}
+        onChange={handleChange}
+        placeholder="09:00"
+        maxLength={5}
+        aria-label={label}
+      />
+    </div>
+  );
+}
+
+/* ---------- 등록 폼 ---------- */
+function CafeForm({ pickedLoc, onCancel, onSubmit, mapStatus, onSetLoc }) {
+  const [name, setName] = useState("");
+  const [dong, setDong] = useState("");
+  const [address, setAddress] = useState("");
+  const [seats, setSeats] = useState("");
+  const [weeklyHours, setWeeklyHours] = useState(DEFAULT_WEEKLY_HOURS);
+  const [commonOpen, setCommonOpen] = useState("09:00");
+  const [commonClose, setCommonClose] = useState("22:00");
+  const [useIndividualHours, setUseIndividualHours] = useState(false);
+  const [showSchedule, setShowSchedule] = useState(false);
+  const [desc, setDesc] = useState("");
+  const [tags, setTags] = useState({ outlet: false, large: false, interior: false, parking: false, cute: false });
+  const [geocoding, setGeocoding] = useState(false);
+  const [geocodeFailed, setGeocodeFailed] = useState(false);
+  const [showAddressSearch, setShowAddressSearch] = useState(false);
+  const postcodeReady = useDaumPostcodeScript();
+  const postcodeContainerRef = useRef(null);
+  const dongRef = useRef(dong);
+  dongRef.current = dong;
+
+  const canSubmit = name.trim() && address.trim();
+
+  const setSchedulePreset = (preset) => {
+    setWeeklyHours((current) => Object.fromEntries(DAYS.map(({ key }) => [key, {
+      ...current[key],
+      closed: preset === "weekday" ? ["sat", "sun"].includes(key) : preset === "weekend" ? !["sat", "sun"].includes(key) : false,
+    }])));
+  };
+
+  const getSubmittedWeeklyHours = () => Object.fromEntries(DAYS.map(({ key }) => [key, {
+    closed: weeklyHours[key].closed,
+    open: useIndividualHours ? weeklyHours[key].open : commonOpen,
+    close: useIndividualHours ? weeklyHours[key].close : commonClose,
+  }]));
+
+  const handleAddressPicked = (data) => {
+    const picked = data.roadAddress || data.jibunAddress || data.address;
+    setAddress(picked);
+    setDong(data.bname || dongRef.current);
+    setGeocodeFailed(false);
+    setShowAddressSearch(false);
+
+    if (mapStatus === "ready") {
+      setGeocoding(true);
+      geocodeAddress(picked, (loc) => {
+        setGeocoding(false);
+        if (loc) {
+          onSetLoc(loc);
+        } else {
+          setGeocodeFailed(true);
+        }
+      });
+    }
+  };
+
+  useEffect(() => {
+    if (!showAddressSearch || !postcodeReady || !window.daum || !postcodeContainerRef.current) return;
+    postcodeContainerRef.current.innerHTML = "";
+    try {
+      new window.daum.Postcode({
+        oncomplete: handleAddressPicked,
+        width: "100%",
+        height: "100%",
+      }).embed(postcodeContainerRef.current);
+    } catch (e) {
+      console.error("주소 검색 embed 실패:", e);
+    }
+  }, [showAddressSearch, postcodeReady]);
+
+  return (
+    <div style={styles.modalOverlay} onClick={onCancel}>
+      <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
+        <h2 style={styles.modalTitle}>카페 등록하기</h2>
+        <p style={styles.modalHint}>
+          {geocoding
+            ? "주소로 위치를 찾는 중이에요..."
+            : pickedLoc
+            ? `위치 지정됨 (${pickedLoc.lat.toFixed(4)}, ${pickedLoc.lng.toFixed(4)}) · 지도를 클릭하면 위치를 조정할 수 있어요`
+            : geocodeFailed
+            ? "주소로 정확한 위치를 찾지 못했어요. 오른쪽 지도를 클릭해 위치를 직접 지정해주세요."
+            : mapStatus === "ready"
+            ? "주소를 검색하면 위치가 지도에 자동으로 표시돼요."
+            : "지금은 목업 지도라 자동 위치 지정이 안 돼요. 주소 검색 후 오른쪽 지도를 클릭해 위치를 지정해주세요."}
+        </p>
+
+        <div style={styles.formGrid}>
+          <label style={styles.label}>
+            카페 이름 *
+            <input style={styles.input} value={name} onChange={(e) => setName(e.target.value)} placeholder="예: 브루웍스 연남" />
+          </label>
+          <label style={styles.label}>
+            동네
+            <input style={styles.input} value={dong} onChange={(e) => setDong(e.target.value)} placeholder="예: 연남동" />
+          </label>
+          <div style={{ ...styles.label, gridColumn: "1 / -1" }}>
+            주소 *
+            {address ? (
+              <div style={styles.addressPicked}>
+                <span style={styles.addressPickedText}>{address}</span>
+                <button type="button" style={styles.addressResearchBtn} onClick={() => setShowAddressSearch(true)}>
+                  다시 검색
+                </button>
+              </div>
+            ) : (
+              <button type="button" style={styles.addressSearchBtn} onClick={() => setShowAddressSearch(true)} disabled={!postcodeReady}>
+                <SearchIcon size={14} color={COLOR.inkSoft} />
+                {postcodeReady ? "주소 검색" : "주소 검색 준비 중..."}
+              </button>
+            )}
+          </div>
+          <label style={styles.label}>
+            좌석 수
+            <input style={styles.input} type="number" value={seats} onChange={(e) => setSeats(e.target.value)} placeholder="예: 40" />
+          </label>
+          <div style={{ ...styles.label, gridColumn: "1 / -1" }}>
+            <button
+              type="button"
+              style={styles.scheduleAccordionBtn}
+              onClick={() => setShowSchedule((value) => !value)}
+              aria-expanded={showSchedule}
+            >
+              <span>
+                <strong style={styles.scheduleAccordionTitle}>요일별 운영시간</strong>
+                <span style={styles.scheduleAccordionSummary}>{commonOpen} ~ {commonClose} · 휴무 요일 설정</span>
+              </span>
+              <span style={styles.scheduleAccordionIcon}>{showSchedule ? "닫기" : "펼치기"}</span>
+            </button>
+            {showSchedule && <div style={styles.weeklyHoursBox}>
+              <div style={styles.commonHoursRow}>
+                <span style={styles.commonHoursLabel}>영업시간</span>
+                <TimePicker value={commonOpen} onChange={setCommonOpen} label="공통 시작 시간" />
+                <span>~</span>
+                <TimePicker value={commonClose} onChange={setCommonClose} label="공통 종료 시간" />
+              </div>
+              <div style={styles.schedulePresets}>
+                <span style={styles.schedulePresetLabel}>빠른 설정</span>
+                <button type="button" style={styles.schedulePresetBtn} onClick={() => setSchedulePreset("weekday")}>평일만</button>
+                <button type="button" style={styles.schedulePresetBtn} onClick={() => setSchedulePreset("weekend")}>주말만</button>
+                <button type="button" style={styles.schedulePresetBtn} onClick={() => setSchedulePreset("everyday")}>매일</button>
+                <button type="button" style={{ ...styles.schedulePresetBtn, ...(useIndividualHours ? styles.schedulePresetBtnActive : {}) }} onClick={() => setUseIndividualHours((value) => !value)}>
+                  {useIndividualHours ? "공통 시간 사용" : "요일별로 다르게 설정"}
+                </button>
+              </div>
+              {DAYS.map(({ key, label }) => {
+                const day = weeklyHours[key];
+                return (
+                  <div key={key} style={styles.daySchedule}>
+                    <label style={{ ...styles.dayClosed, ...(day.closed ? styles.dayClosedActive : {}) }}>
+                      <input
+                        type="checkbox"
+                        checked={day.closed}
+                        style={styles.dayCheckbox}
+                        onChange={(e) => setWeeklyHours((current) => ({
+                          ...current,
+                          [key]: { ...current[key], closed: e.target.checked },
+                        }))}
+                      />
+                      <strong>{label}요일</strong>
+                      <span style={day.closed ? styles.closedText : styles.openText}>{day.closed ? "휴무" : "영업중"}</span>
+                    </label>
+                    {day.closed ? (
+                      <span style={styles.closedText}>휴무</span>
+                    ) : !useIndividualHours ? (
+                      <span style={styles.dayHoursText}>{commonOpen} ~ {commonClose}</span>
+                    ) : (
+                      <div style={styles.timeInputs}>
+                        <TimePicker value={day.open} onChange={(value) => setWeeklyHours((current) => ({ ...current, [key]: { ...current[key], open: value } }))} label={`${label}요일 시작 시간`} />
+                        <span>~</span>
+                        <TimePicker value={day.close} onChange={(value) => setWeeklyHours((current) => ({ ...current, [key]: { ...current[key], close: value } }))} label={`${label}요일 종료 시간`} />
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>}
+          </div>
+          <label style={{ ...styles.label, gridColumn: "1 / -1" }}>
+            소개
+            <textarea style={{ ...styles.input, height: 60, resize: "vertical" }} value={desc} onChange={(e) => setDesc(e.target.value)} placeholder="이 카페의 특징을 간단히 적어주세요" />
+          </label>
+        </div>
+
+        <div style={styles.tagCheckRow}>
+          {FILTERS.map(({ key, label, icon: Icon }) => (
+            <label key={key} style={{ ...styles.tagCheck, ...(tags[key] ? styles.tagCheckActive : {}) }}>
+              <input
+                type="checkbox"
+                checked={tags[key]}
+                onChange={(e) => setTags((t) => ({ ...t, [key]: e.target.checked }))}
+                style={{ display: "none" }}
+              />
+              <Icon size={13} color={tags[key] ? "#FFFDF8" : "#5B5648"} />
+              {label}
+            </label>
+          ))}
+        </div>
+
+        <div style={styles.modalActions}>
+          <button style={styles.cancelBtn} onClick={onCancel}>취소</button>
+          <button
+            style={{ ...styles.submitBtn, opacity: canSubmit ? 1 : 0.45, cursor: canSubmit ? "pointer" : "not-allowed" }}
+            disabled={!canSubmit}
+            onClick={() => canSubmit && onSubmit({ name, dong, address, seats, weeklyHours: getSubmittedWeeklyHours(), desc, tags })}
+          >
+            등록하기
+          </button>
+        </div>
+      </div>
+
+      {showAddressSearch && (
+        <div style={styles.postcodeOverlay} onClick={() => setShowAddressSearch(false)}>
+          <div style={styles.postcodeModal} onClick={(e) => e.stopPropagation()}>
+            <div style={styles.postcodeHeader}>
+              <span style={styles.postcodeHeaderTitle}>주소 검색</span>
+              <button type="button" style={styles.postcodeCloseBtn} onClick={() => setShowAddressSearch(false)}>
+                닫기
+              </button>
+            </div>
+            <div ref={postcodeContainerRef} style={styles.postcodeContainer} />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ---------- 실제 네이버 지도 ---------- */
+function NaverRealMap({ cafes, selected, hovered, onSelect, onHover, pickMode, onPick, pickedLoc }) {
+  const mapRef = useRef(null);
+  const mapObj = useRef(null);
+  const markersRef = useRef({});
+  const pickMarkerRef = useRef(null);
+  const boundsFitRef = useRef(false);
+  const onSelectRef = useRef(onSelect);
+  const onHoverRef = useRef(onHover);
+
+  useEffect(() => { onSelectRef.current = onSelect; }, [onSelect]);
+  useEffect(() => { onHoverRef.current = onHover; }, [onHover]);
+
+  useEffect(() => {
+    if (!window.naver || !mapRef.current || mapObj.current) return;
+    try {
+      const { naver } = window;
+      mapObj.current = new naver.maps.Map(mapRef.current, {
+        center: new naver.maps.LatLng(37.5535, 126.914),
+        zoom: 14,
+      });
+    } catch (e) {
+      console.error("네이버 지도 초기화 실패:", e);
+    }
+  }, []);
+
+  // 카페 목록이 바뀔 때만 마커를 생성/제거 (호버·선택으로는 재생성하지 않음 - 줌 중 충돌 방지)
+  useEffect(() => {
+    if (!mapObj.current || !window.naver) return;
+    const { naver } = window;
+    const map = mapObj.current;
+    try {
+      const currentIds = new Set(cafes.map((c) => String(c.id)));
+      Object.keys(markersRef.current).forEach((idStr) => {
+        if (!currentIds.has(idStr)) {
+          try { markersRef.current[idStr].setMap(null); } catch (e) {}
+          delete markersRef.current[idStr];
+        }
+      });
+
+      cafes.forEach((c) => {
+        const idStr = String(c.id);
+        if (markersRef.current[idStr]) {
+          markersRef.current[idStr].setPosition(new naver.maps.LatLng(c.lat, c.lng));
+          return;
+        }
+        const marker = new naver.maps.Marker({
+          position: new naver.maps.LatLng(c.lat, c.lng),
+          map,
+          icon: {
+            url: pinDataUrl("#B5533C", false),
+            size: new naver.maps.Size(30, 38),
+            scaledSize: new naver.maps.Size(28, 36),
+            anchor: new naver.maps.Point(14, 34),
+          },
+        });
+        naver.maps.Event.addListener(marker, "click", () => {
+          try { onSelectRef.current(c.id); } catch (e) { console.error(e); }
+        });
+        naver.maps.Event.addListener(marker, "mouseover", () => {
+          try { onHoverRef.current(c.id); } catch (e) { console.error(e); }
+        });
+        naver.maps.Event.addListener(marker, "mouseout", () => {
+          try { onHoverRef.current(null); } catch (e) { console.error(e); }
+        });
+        markersRef.current[idStr] = marker;
+      });
+
+      if (cafes.length > 0 && !boundsFitRef.current) {
+        const bounds = new naver.maps.LatLngBounds();
+        cafes.forEach((c) => bounds.extend(new naver.maps.LatLng(c.lat, c.lng)));
+        map.fitBounds(bounds);
+        boundsFitRef.current = true;
+      }
+    } catch (e) {
+      console.error("마커 갱신 실패:", e);
+    }
+  }, [cafes]);
+
+  // 선택/호버 상태가 바뀔 때는 기존 마커의 아이콘만 교체 (재생성 없음)
+  useEffect(() => {
+    if (!window.naver) return;
+    const { naver } = window;
+    try {
+      Object.entries(markersRef.current).forEach(([idStr, marker]) => {
+        const isSelected = String(selected) === idStr;
+        const isHovered = String(hovered) === idStr;
+        marker.setIcon({
+          url: pinDataUrl("#B5533C", isSelected || isHovered),
+          size: new naver.maps.Size(30, 38),
+          scaledSize: new naver.maps.Size(isSelected ? 38 : 28, isSelected ? 48 : 36),
+          anchor: new naver.maps.Point(14, 34),
+        });
+      });
+    } catch (e) {
+      console.error("마커 아이콘 갱신 실패:", e);
+    }
+  }, [selected, hovered]);
+
+  useEffect(() => {
+    if (!mapObj.current || !window.naver) return;
+    const { naver } = window;
+    const map = mapObj.current;
+    let listener;
+    try {
+      listener = naver.maps.Event.addListener(map, "click", (e) => {
+        try {
+          if (!pickMode) return;
+          onPick(e.coord.y, e.coord.x);
+        } catch (err) {
+          console.error(err);
+        }
+      });
+    } catch (e) {
+      console.error("지도 클릭 리스너 등록 실패:", e);
+    }
+    return () => {
+      try { if (listener) naver.maps.Event.removeListener(listener); } catch (e) {}
+    };
+  }, [pickMode, onPick]);
+
+  useEffect(() => {
+    if (!mapObj.current || !window.naver) return;
+    const { naver } = window;
+    try {
+      if (pickMarkerRef.current) pickMarkerRef.current.setMap(null);
+      if (pickedLoc) {
+        pickMarkerRef.current = new naver.maps.Marker({
+          position: new naver.maps.LatLng(pickedLoc.lat, pickedLoc.lng),
+          map: mapObj.current,
+          icon: { url: pinDataUrl("#3D6B5F", true), size: new naver.maps.Size(30, 38), scaledSize: new naver.maps.Size(30, 38), anchor: new naver.maps.Point(14, 34) },
+        });
+      }
+    } catch (e) {
+      console.error("선택 위치 마커 갱신 실패:", e);
+    }
+  }, [pickedLoc]);
+
+  return <div ref={mapRef} style={styles.mapSvg} />;
+}
+
+/* ---------- 목업(일러스트) 지도 - Client ID 없을 때 대체 ---------- */
+function MockMapView({ cafes, selected, hovered, onSelect, onHover, pickMode, onPick, pickedLoc }) {
+  const handleBgClick = (e) => {
+    if (!pickMode) return;
+    const svg = e.currentTarget;
+    const rect = svg.getBoundingClientRect();
+    const xPct = ((e.clientX - rect.left) / rect.width) * 100;
+    const yPct = ((e.clientY - rect.top) / rect.height) * 100;
+    const lng = BOUNDS.minLng + (xPct - 4) / 92 * (BOUNDS.maxLng - BOUNDS.minLng);
+    const lat = BOUNDS.maxLat - (yPct - 4) / 92 * (BOUNDS.maxLat - BOUNDS.minLat);
+    onPick(lat, lng);
+  };
+  const pickedXY = pickedLoc ? latLngToXY(pickedLoc.lat, pickedLoc.lng) : null;
+
+  return (
+    <svg
+      viewBox="0 0 100 100"
+      style={{ ...styles.mapSvg, cursor: pickMode ? "crosshair" : "default" }}
+      preserveAspectRatio="xMidYMid slice"
+      onClick={handleBgClick}
+    >
+      <rect x="0" y="0" width="100" height="100" fill="#E7E2D6" />
+      {BLOCKS.map((b, i) => (
+        <rect key={i} x={b.x} y={b.y} width={b.w} height={b.h} fill={b.c} opacity="0.6" rx="1.2" />
+      ))}
+      {STREETS.map((s, i) => (
+        <line key={i} x1={s.x1} y1={s.y1} x2={s.x2} y2={s.y2} stroke="#D8D2C2" strokeWidth={s.w} strokeLinecap="round" />
+      ))}
+
+      {cafes.map((c) => {
+        const { x, y } = latLngToXY(c.lat, c.lng);
+        const isSelected = selected === c.id;
+        const isHovered = hovered === c.id;
+        const scale = isSelected ? 1.35 : isHovered ? 1.15 : 1;
+        return (
+          <g
+            key={c.id}
+            transform={`translate(${x} ${y})`}
+            onClick={(e) => { e.stopPropagation(); onSelect(c.id); }}
+            onMouseEnter={() => onHover(c.id)}
+            onMouseLeave={() => onHover(null)}
+            style={{ cursor: "pointer" }}
+          >
+            <g transform={`translate(-2.6 -6.8) scale(${scale * 0.175})`}>
+              <PinIcon filled={isSelected || isHovered} color="#B5533C" />
+            </g>
+            {(isSelected || isHovered) && (
+              <g transform="translate(0 -9.5)">
+                <rect x={-((c.name.length * 1.9 + 3) / 2)} y="-3.6" width={c.name.length * 1.9 + 3} height="5.4" rx="1.4" fill="#26241F" />
+                <text x="0" y="0.3" textAnchor="middle" fontSize="2.6" fill="#FFFDF8" fontFamily="'Noto Sans KR', sans-serif">{c.name}</text>
+              </g>
+            )}
+          </g>
+        );
+      })}
+
+      {pickedXY && (
+        <g transform={`translate(${pickedXY.x} ${pickedXY.y})`}>
+          <g transform="translate(-2.6 -6.8) scale(0.19)">
+            <PinIcon filled color="#3D6B5F" />
+          </g>
+        </g>
+      )}
+    </svg>
+  );
+}
+
+const BLOCKS = [
+  { x: 4, y: 4, w: 18, h: 14, c: "#DAD3C1" }, { x: 26, y: 6, w: 14, h: 10, c: "#E0DACB" },
+  { x: 6, y: 22, w: 12, h: 16, c: "#DDD6C6" }, { x: 46, y: 4, w: 20, h: 20, c: "#E0DACB" },
+  { x: 70, y: 8, w: 22, h: 16, c: "#DAD3C1" }, { x: 4, y: 44, w: 20, h: 18, c: "#DDD6C6" },
+  { x: 28, y: 46, w: 16, h: 22, c: "#E0DACB" }, { x: 48, y: 40, w: 18, h: 16, c: "#DAD3C1" },
+  { x: 70, y: 34, w: 24, h: 20, c: "#DDD6C6" }, { x: 8, y: 68, w: 22, h: 24, c: "#E0DACB" },
+  { x: 34, y: 72, w: 18, h: 20, c: "#DAD3C1" }, { x: 56, y: 64, w: 20, h: 28, c: "#DDD6C6" },
+  { x: 78, y: 62, w: 16, h: 22, c: "#E0DACB" },
+];
+const STREETS = [
+  { x1: 0, y1: 20, x2: 100, y2: 20, w: 1.1 }, { x1: 0, y1: 42, x2: 100, y2: 42, w: 1.1 },
+  { x1: 0, y1: 62, x2: 100, y2: 62, w: 1.1 }, { x1: 24, y1: 0, x2: 24, y2: 100, w: 1.1 },
+  { x1: 46, y1: 0, x2: 46, y2: 100, w: 1.1 }, { x1: 68, y1: 0, x2: 68, y2: 100, w: 1.1 },
+];
+
+const FONT_IMPORT = `@import url('https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@600;700&family=Noto+Sans+KR:wght@400;500;600;700&display=swap');
+.cf-filterbar::-webkit-scrollbar { display: none; }`;
+
+const COLOR = {
+  bg: "#EDE9DD", surface: "#FFFDF8", ink: "#26241F", inkSoft: "#6B6355",
+  accent: "#B5533C", accentSoft: "#EFDCD3", teal: "#3D6B5F", tealSoft: "#DCE8E2", border: "#DED7C6",
+};
+
+const styles = {
+  appOuter: {
+    minHeight: "100dvh",
+    background: "#DDD6C5",
+    display: "flex",
+    justifyContent: "center",
+    fontFamily: "'Noto Sans KR', sans-serif",
+  },
+  appShell: {
+    width: "100%",
+    maxWidth: 480,
+    minHeight: "100dvh",
+    background: COLOR.bg,
+    color: COLOR.ink,
+    display: "flex",
+    flexDirection: "column",
+    boxShadow: "0 0 44px rgba(38,36,31,0.14)",
+  },
+  header: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "18px 16px 12px" },
+  eyebrow: { margin: 0, fontSize: 11.5, letterSpacing: "0.12em", color: COLOR.accent, fontWeight: 600 },
+  title: { margin: "2px 0 0", fontFamily: "'Noto Serif KR', serif", fontSize: 24, fontWeight: 700, letterSpacing: "-0.01em" },
+  addBtn: { padding: "9px 14px", borderRadius: 999, border: "none", background: COLOR.ink, color: "#FFFDF8", fontSize: 12.5, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" },
+  searchBar: { display: "flex", alignItems: "center", gap: 8, margin: "0 16px 10px", padding: "10px 12px", borderRadius: 12, border: `1px solid ${COLOR.border}`, background: COLOR.surface },
+  searchInput: { flex: 1, border: "none", outline: "none", background: "transparent", fontSize: 15, color: COLOR.ink, fontFamily: "'Noto Sans KR', sans-serif" },
+  searchClearBtn: { border: "none", background: "transparent", color: COLOR.inkSoft, fontSize: 13, cursor: "pointer", padding: 2 },
+  filterBarWrap: { position: "relative", margin: "0 0 12px" },
+  filterBar: {
+    display: "flex",
+    flexWrap: "nowrap",
+    alignItems: "center",
+    gap: 8,
+    padding: "0 16px",
+    overflowX: "auto",
+    scrollSnapType: "x proximity",
+    WebkitOverflowScrolling: "touch",
+    scrollbarWidth: "none",
+  },
+  filterBarFade: {
+    position: "absolute",
+    right: 0,
+    top: 0,
+    bottom: 0,
+    width: 28,
+    background: `linear-gradient(to right, transparent, ${COLOR.bg})`,
+    pointerEvents: "none",
+  },
+  filterChip: { display: "flex", alignItems: "center", gap: 6, padding: "8px 13px", borderRadius: 999, border: `1px solid ${COLOR.border}`, background: COLOR.surface, color: COLOR.ink, fontSize: 13, fontWeight: 500, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0, scrollSnapAlign: "start" },
+  filterChipActive: { background: COLOR.accent, borderColor: COLOR.accent, color: "#FFFDF8" },
+  resetBtn: { padding: "8px 10px", borderRadius: 999, border: "none", background: "transparent", color: COLOR.inkSoft, fontSize: 12, textDecoration: "underline", cursor: "pointer", flexShrink: 0 },
+  mapNotice: { margin: "0 16px 10px", padding: "9px 12px", background: COLOR.accentSoft, color: "#7A3B29", fontSize: 12, borderRadius: 10 },
+  mobileTabBar: { display: "flex", gap: 8, padding: "0 16px 10px" },
+  mobileTabBtn: { flex: 1, padding: "10px 0", borderRadius: 10, border: `1px solid ${COLOR.border}`, background: COLOR.surface, color: COLOR.ink, fontSize: 14, fontWeight: 600, cursor: "pointer" },
+  mobileTabBtnActive: { background: COLOR.ink, borderColor: COLOR.ink, color: "#FFFDF8" },
+  mainMobile: { flex: 1, minHeight: 0, display: "flex", flexDirection: "column" },
+  listPaneMobile: { flex: 1, minHeight: 0, overflowY: "auto", display: "flex", flexDirection: "column", gap: 10, padding: "0 16px 24px" },
+  emptyState: { padding: "40px 20px", textAlign: "center", color: COLOR.inkSoft, fontSize: 13.5, background: COLOR.surface, borderRadius: 14, border: `1px dashed ${COLOR.border}` },
+  card: { background: COLOR.surface, border: `1px solid ${COLOR.border}`, borderRadius: 14, padding: "14px 16px", cursor: "pointer", transition: "border-color 0.15s ease" },
+  cardSelected: { borderColor: COLOR.accent, boxShadow: `0 0 0 1px ${COLOR.accent}` },
+  cardTop: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 },
+  cardTitle: { margin: 0, fontSize: 16, fontWeight: 700, fontFamily: "'Noto Serif KR', serif" },
+  cardDong: { margin: "3px 0 0", fontSize: 12, color: COLOR.inkSoft },
+  rating: { fontSize: 12.5, color: COLOR.accent, fontWeight: 600, whiteSpace: "nowrap" },
+  cardDesc: { margin: "8px 0 10px", fontSize: 13, color: "#514C40", lineHeight: 1.5 },
+  badgeRow: { display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 },
+  badge: { display: "flex", alignItems: "center", gap: 4, fontSize: 11.5, padding: "3px 8px", borderRadius: 999, background: COLOR.tealSoft, color: COLOR.teal, fontWeight: 500 },
+  cardMeta: { fontSize: 11.5, color: COLOR.inkSoft },
+  openBadge: { marginLeft: 6, padding: "1px 7px", borderRadius: 999, background: COLOR.tealSoft, color: COLOR.teal, fontWeight: 600, fontSize: 10.5 },
+  closedBadge: { marginLeft: 6, padding: "1px 7px", borderRadius: 999, background: "#EDE3DD", color: "#9B7A68", fontWeight: 600, fontSize: 10.5 },
+  mapPaneMobile: { flex: 1, minHeight: 0, position: "relative", overflow: "hidden" },
+  mapSvg: { width: "100%", height: "100%", display: "block" },
+  detailOverlay: { position: "fixed", inset: 0, zIndex: 60, display: "flex", alignItems: "center", justifyContent: "center", padding: 12, background: "rgba(38,36,31,0.5)" },
+  detailModal: { width: "100%", maxWidth: 560, maxHeight: "94vh", overflowY: "auto", padding: 20, borderRadius: 18, background: COLOR.surface, boxShadow: "0 10px 30px rgba(38,36,31,0.22)" },
+  detailHeader: { display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10 },
+  detailEyebrow: { margin: 0, color: COLOR.accent, fontSize: 11.5, fontWeight: 600 },
+  detailTitle: { margin: "3px 0 0", fontFamily: "'Noto Serif KR', serif", fontSize: 22 },
+  detailReviewCount: { margin: "4px 0 0", color: COLOR.inkSoft, fontSize: 12 },
+  detailCloseBtn: { width: 40, height: 40, border: "none", borderRadius: 10, background: COLOR.bg, color: COLOR.ink, fontSize: 26, lineHeight: 1, cursor: "pointer" },
+  detailAddress: { margin: "0 0 10px", color: COLOR.inkSoft, fontSize: 13 },
+  detailDescription: { margin: "8px 0 14px", color: "#514C40", fontSize: 13.5, lineHeight: 1.55 },
+  detailInfoGrid: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1, marginBottom: 16, overflow: "hidden", borderRadius: 10, background: COLOR.border },
+  detailInfoGridItem: { padding: 10, background: COLOR.surface },
+  detailInfoLabel: { display: "block", marginBottom: 3, color: COLOR.inkSoft, fontSize: 11.5 },
+  naverMapLink: { display: "block", margin: "0 0 16px", color: COLOR.teal, fontSize: 11.5, fontWeight: 600, textAlign: "right", textDecoration: "underline", textUnderlineOffset: 3 },
+  reviewSection: { borderTop: `1px solid ${COLOR.border}`, paddingTop: 15 },
+  reviewSectionHeader: { display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8, marginBottom: 9 },
+  reviewTitle: { margin: 0, fontSize: 16, fontWeight: 700, fontFamily: "'Noto Serif KR', serif" },
+  writeReviewBtn: { minHeight: 38, padding: "0 12px", border: `1px solid ${COLOR.teal}`, borderRadius: 8, background: COLOR.tealSoft, color: COLOR.teal, fontSize: 12, fontWeight: 600, cursor: "pointer", touchAction: "manipulation" },
+  reviewOverlay: { position: "fixed", inset: 0, zIndex: 80, display: "flex", alignItems: "center", justifyContent: "center", padding: 16, background: "rgba(38,36,31,0.55)" },
+  reviewModal: { width: "100%", maxWidth: 420, padding: 18, borderRadius: 16, background: COLOR.surface, boxShadow: "0 10px 30px rgba(38,36,31,0.24)" },
+  reviewModalHeader: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 },
+  reviewModalTitle: { margin: 0, fontSize: 18, fontFamily: "'Noto Serif KR', serif" },
+  reviewModalCloseBtn: { width: 38, height: 38, border: "none", borderRadius: 8, background: COLOR.bg, color: COLOR.ink, fontSize: 24, cursor: "pointer" },
+  reviewModalCafeName: { margin: "4px 0 13px", color: COLOR.inkSoft, fontSize: 12.5 },
+  ratingPicker: { display: "flex", gap: 2, marginBottom: 7 },
+  starButton: { width: 30, height: 30, padding: 0, border: "none", background: "transparent", color: COLOR.border, fontSize: 22, lineHeight: 1, cursor: "pointer" },
+  starButtonActive: { color: "#D78A32" },
+  reviewInput: { width: "100%", minHeight: 66, boxSizing: "border-box", padding: 9, borderRadius: 8, border: `1px solid ${COLOR.border}`, resize: "vertical", background: COLOR.surface, color: COLOR.ink, fontFamily: "'Noto Sans KR', sans-serif", fontSize: 13 },
+  reviewImagePreviewRow: { display: "flex", gap: 6, overflowX: "auto", marginTop: 8 },
+  reviewImagePreview: { width: 62, height: 62, flexShrink: 0, objectFit: "cover", borderRadius: 7 },
+  reviewComposerActions: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginTop: 9 },
+  photoAttachBtn: { display: "inline-flex", alignItems: "center", minHeight: 38, padding: "0 12px", borderRadius: 8, border: `1px solid ${COLOR.border}`, background: COLOR.surface, color: COLOR.inkSoft, fontSize: 12, fontWeight: 600, cursor: "pointer" },
+  reviewSubmitBtn: { minHeight: 38, padding: "0 15px", border: "none", borderRadius: 8, background: COLOR.accent, color: "#FFFDF8", fontSize: 12, fontWeight: 600, cursor: "pointer" },
+  reviewItem: { padding: "14px 2px", borderBottom: `1px solid ${COLOR.border}` },
+  reviewItemTop: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 },
+  reviewStars: { color: "#D78A32", fontSize: 13, letterSpacing: "0.04em" },
+  reviewDate: { color: COLOR.inkSoft, fontSize: 11 },
+  reviewText: { margin: "7px 0 8px", color: COLOR.ink, fontSize: 13, lineHeight: 1.5 },
+  reviewImageGrid: { display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 5 },
+  reviewImage: { width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 7 },
+  photoGallerySection: { marginTop: 16, paddingTop: 15, borderTop: `1px solid ${COLOR.border}` },
+  photoGallery: { display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 6, marginTop: 9 },
+  galleryImage: { width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 8 },
+  emptyPhotoText: { margin: "8px 0 0", color: COLOR.inkSoft, fontSize: 12 },
+  modalOverlay: { position: "fixed", inset: 0, background: "rgba(38,36,31,0.5)", display: "flex", alignItems: "flex-end", justifyContent: "center", zIndex: 50 },
+  modal: { background: COLOR.surface, borderRadius: "18px 18px 0 0", padding: "22px 20px", maxWidth: 480, width: "100%", maxHeight: "88vh", overflowY: "auto" },
+  modalTitle: { margin: "0 0 6px", fontFamily: "'Noto Serif KR', serif", fontSize: 20, fontWeight: 700 },
+  modalHint: { margin: "0 0 16px", fontSize: 12.5, color: COLOR.inkSoft, background: COLOR.tealSoft, padding: "8px 12px", borderRadius: 8 },
+  formGrid: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 },
+  label: { display: "flex", flexDirection: "column", gap: 5, fontSize: 12.5, color: COLOR.inkSoft, fontWeight: 500 },
+  input: { padding: "9px 10px", borderRadius: 8, border: `1px solid ${COLOR.border}`, fontSize: 15, fontFamily: "'Noto Sans KR', sans-serif", color: COLOR.ink },
+  addressSearchBtn: { display: "flex", alignItems: "center", gap: 6, padding: "9px 10px", borderRadius: 8, border: `1px solid ${COLOR.border}`, background: COLOR.surface, color: COLOR.inkSoft, fontSize: 13.5, cursor: "pointer" },
+  addressPicked: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "9px 10px", borderRadius: 8, border: `1px solid ${COLOR.border}`, background: COLOR.tealSoft },
+  addressPickedText: { fontSize: 13.5, color: COLOR.ink, flex: 1 },
+  addressResearchBtn: { padding: "5px 10px", borderRadius: 999, border: "none", background: COLOR.teal, color: "#FFFDF8", fontSize: 11.5, fontWeight: 600, whiteSpace: "nowrap", cursor: "pointer" },
+  scheduleAccordionBtn: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, width: "100%", minHeight: 58, padding: "9px 12px", borderRadius: 10, border: `1px solid ${COLOR.border}`, background: COLOR.surface, color: COLOR.ink, textAlign: "left", cursor: "pointer", touchAction: "manipulation" },
+  scheduleAccordionTitle: { display: "block", color: COLOR.ink, fontSize: 13 },
+  scheduleAccordionSummary: { display: "block", marginTop: 3, color: COLOR.inkSoft, fontSize: 11.5, fontWeight: 400 },
+  scheduleAccordionIcon: { flexShrink: 0, color: COLOR.teal, fontSize: 11.5, fontWeight: 600 },
+  postcodeOverlay: { position: "fixed", inset: 0, background: "rgba(38,36,31,0.55)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 70, padding: 16 },
+  postcodeModal: { background: COLOR.surface, borderRadius: 14, width: "100%", maxWidth: 440, overflow: "hidden", display: "flex", flexDirection: "column" },
+  postcodeHeader: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 14px", borderBottom: `1px solid ${COLOR.border}` },
+  postcodeHeaderTitle: { fontSize: 14, fontWeight: 600, color: COLOR.ink },
+  postcodeCloseBtn: { border: "none", background: "transparent", color: COLOR.inkSoft, fontSize: 13, cursor: "pointer" },
+  postcodeContainer: { width: "100%", height: 440 },
+  tagCheckRow: { display: "flex", flexWrap: "wrap", gap: 8, margin: "16px 0 4px" },
+  tagCheck: { display: "flex", alignItems: "center", gap: 6, padding: "7px 12px", borderRadius: 999, border: `1px solid ${COLOR.border}`, fontSize: 12.5, cursor: "pointer", color: COLOR.ink },
+  tagCheckActive: { background: COLOR.teal, borderColor: COLOR.teal, color: "#FFFDF8" },
+  weeklyHoursBox: { display: "flex", flexDirection: "column", gap: 7, padding: "10px 12px", borderRadius: 10, border: `1px solid ${COLOR.border}`, background: "#FAF8F0" },
+  commonHoursRow: { display: "flex", alignItems: "center", gap: 6, paddingBottom: 8, borderBottom: `1px solid ${COLOR.border}`, color: COLOR.inkSoft, fontSize: 12 },
+  commonHoursLabel: { width: 42, color: COLOR.ink, fontWeight: 600 },
+  schedulePresets: { display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", paddingBottom: 5 },
+  schedulePresetLabel: { marginRight: 2, fontSize: 11.5, color: COLOR.inkSoft },
+  schedulePresetBtn: { minHeight: 42, padding: "8px 14px", borderRadius: 10, border: `1px solid ${COLOR.border}`, background: COLOR.surface, color: COLOR.inkSoft, fontSize: 12.5, fontWeight: 600, cursor: "pointer", touchAction: "manipulation" },
+  schedulePresetBtnActive: { background: COLOR.tealSoft, borderColor: COLOR.teal, color: COLOR.teal },
+  daySchedule: { display: "flex", alignItems: "center", minHeight: 48, gap: 8 },
+  dayClosed: { display: "flex", alignItems: "center", gap: 8, flex: 1, minHeight: 44, padding: "5px 9px", borderRadius: 9, color: COLOR.ink, fontSize: 13, cursor: "pointer", touchAction: "manipulation" },
+  dayClosedActive: { background: COLOR.accentSoft, color: COLOR.accent },
+  dayCheckbox: { width: 24, height: 24, margin: 0, accentColor: COLOR.accent, cursor: "pointer" },
+  openText: { marginLeft: "auto", color: COLOR.teal, fontSize: 12, fontWeight: 600 },
+  closedText: { color: COLOR.accent, fontSize: 12 },
+  dayHoursText: { color: COLOR.inkSoft, fontSize: 12 },
+  timeInputs: { display: "flex", alignItems: "center", gap: 5, color: COLOR.inkSoft, fontSize: 12 },
+  timePicker: { display: "flex", alignItems: "center", borderRadius: 9, border: `1px solid ${COLOR.border}`, background: COLOR.surface },
+  timeTextInput: { width: 86, height: 42, padding: "0 9px", border: "none", borderRadius: 8, outline: "none", background: "transparent", color: COLOR.ink, fontSize: 17, fontWeight: 600, textAlign: "center", letterSpacing: "0.04em" },
+  modalActions: { display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 20 },
+  cancelBtn: { padding: "10px 16px", borderRadius: 999, border: `1px solid ${COLOR.border}`, background: "transparent", fontSize: 13, cursor: "pointer" },
+  submitBtn: { padding: "10px 18px", borderRadius: 999, border: "none", background: COLOR.accent, color: "#FFFDF8", fontSize: 13, fontWeight: 600 },
+};
