@@ -19,6 +19,9 @@ function latLngToXY(lat, lng) {
   return { x, y };
 }
 
+/* 테스트 단계 로컬 저장소 키 (백엔드 구성 전까지 사용) */
+const CAFES_STORAGE_KEY = "cafe-finder:cafes";
+
 /* ---------- 초기 목업 데이터 (실좌표 포함) ---------- */
 const INITIAL_CAFES = [
   { id: 1, name: "브루웍스 연남", dong: "연남동", address: "연남동 227-3",
@@ -444,14 +447,24 @@ function CafeFinderInner() {
 
   const mapStatus = useNaverMapsScript(NAVER_CONFIG.clientId);
 
+  // 테스트 단계: DB/백엔드 없이 브라우저 localStorage에만 저장한다.
+  // 백엔드 구성 후에는 이 블록을 /api 호출로 교체하면 된다.
   useEffect(() => {
-    fetch("/api/cafes")
-      .then((response) => response.ok ? response.json() : null)
-      .then((data) => {
-        if (data?.cafes?.length) setCafes((current) => [...data.cafes, ...current]);
-      })
-      .catch((error) => console.warn("저장된 카페를 불러오지 못했습니다.", error));
+    try {
+      const saved = JSON.parse(localStorage.getItem(CAFES_STORAGE_KEY) || "null");
+      if (Array.isArray(saved) && saved.length) setCafes(saved);
+    } catch (error) {
+      console.warn("저장된 카페를 불러오지 못했습니다.", error);
+    }
   }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(CAFES_STORAGE_KEY, JSON.stringify(cafes));
+    } catch (error) {
+      console.warn("카페를 저장하지 못했습니다.", error);
+    }
+  }, [cafes]);
 
   const toggleFilter = (key) => {
     setActive((prev) => {
@@ -555,33 +568,21 @@ function CafeFinderInner() {
       lat: loc.lat,
       lng: loc.lng,
     };
-    try {
-      const response = await fetch("/api/cafes", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(newCafe),
-      });
-      if (!response.ok) throw new Error("카페 저장 실패");
-      const savedCafe = (await response.json()).cafe;
-      setCafes((prev) => [savedCafe, ...prev]);
-      selectCafe(savedCafe.id);
-    } catch (error) {
-      console.error(error);
-      setCafes((prev) => [newCafe, ...prev]);
-      selectCafe(newCafe.id);
-    }
+    // 테스트 단계: state에만 추가하면 localStorage 저장 effect가 이어서 처리한다.
+    setCafes((prev) => [newCafe, ...prev]);
+    selectCafe(newCafe.id);
     setShowForm(false);
     setPickedLoc(null);
   };
 
   const addReview = async (cafeId, review) => {
-    const response = await fetch(`/api/cafes/${cafeId}/reviews`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(review),
-    });
-    if (!response.ok) throw new Error("리뷰 저장 실패");
-    const savedReview = (await response.json()).review;
+    const savedReview = {
+      id: review.id ?? Date.now(),
+      rating: Number(review.rating) || 0,
+      text: (review.text || "").trim(),
+      images: review.images || [],
+      createdAt: review.createdAt || new Date().toLocaleDateString("ko-KR"),
+    };
     setCafes((prev) => prev.map((cafe) => cafe.id === cafeId
       ? { ...cafe, reviews: [savedReview, ...(cafe.reviews || [])] }
       : cafe));
@@ -1129,11 +1130,6 @@ function CafeForm({ pickedLoc, onCancel, onSubmit, mapStatus, onSetLoc }) {
         </p>
 
         <div style={styles.formGrid}>
-          <label style={styles.label}>
-            카페 이름 *
-            <input style={styles.input} value={name} onChange={(e) => setName(e.target.value)} placeholder="예: 브루웍스 연남" />
-            {naverPlace && <span style={styles.naverPlaceHint}>네이버 장소명을 불러왔어요. 필요하면 이름을 수정할 수 있어요.</span>}
-          </label>
           <div style={{ ...styles.label, gridColumn: "1 / -1" }}>
             주소 *
             <div style={styles.placeSearchRow}>
@@ -1174,7 +1170,12 @@ function CafeForm({ pickedLoc, onCancel, onSubmit, mapStatus, onSetLoc }) {
               </button>
             )}
           </div>
-          <label style={styles.label}>
+          <label style={{ ...styles.label, gridColumn: "1 / -1" }}>
+            카페 이름 *
+            <input style={styles.input} value={name} onChange={(e) => setName(e.target.value)} placeholder="예: 브루웍스 연남" />
+            {naverPlace && <span style={styles.naverPlaceHint}>네이버 장소명을 불러왔어요. 필요하면 이름을 수정할 수 있어요.</span>}
+          </label>
+          <label style={{ ...styles.label, gridColumn: "1 / -1" }}>
             좌석 수
             <input style={styles.input} type="number" value={seats} onChange={(e) => setSeats(e.target.value)} placeholder="예: 40" />
           </label>

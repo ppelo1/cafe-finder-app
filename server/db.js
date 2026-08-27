@@ -37,14 +37,18 @@ db.exec(`
   );
 `);
 
-function mapCafe(row) {
-  const reviews = db.prepare("SELECT id, rating, text, images_json, created_at FROM reviews WHERE cafe_id = ? ORDER BY id DESC").all(row.id).map((review) => ({
+function mapReview(review) {
+  return {
     id: review.id,
     rating: review.rating,
     text: review.text,
     images: JSON.parse(review.images_json),
     createdAt: new Date(`${review.created_at}Z`).toLocaleDateString("ko-KR"),
-  }));
+  };
+}
+
+function mapCafe(row) {
+  const reviews = db.prepare("SELECT id, rating, text, images_json, created_at FROM reviews WHERE cafe_id = ? ORDER BY id DESC").all(row.id).map(mapReview);
   return {
     id: row.id,
     name: row.name,
@@ -88,5 +92,5 @@ export function insertCafe(cafe) {
 
 export function insertReview(cafeId, review) {
   const result = db.prepare("INSERT INTO reviews (cafe_id, rating, text, images_json) VALUES (?, ?, ?, ?)").run(cafeId, Number(review.rating) || 0, review.text || "", JSON.stringify(review.images || []));
-  return db.prepare("SELECT id, rating, text, images_json, created_at FROM reviews WHERE id = ?").get(Number(result.lastInsertRowid));
+  return mapReview(db.prepare("SELECT id, rating, text, images_json, created_at FROM reviews WHERE id = ?").get(Number(result.lastInsertRowid)));
 }
