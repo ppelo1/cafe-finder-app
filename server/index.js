@@ -1,5 +1,6 @@
 import "dotenv/config";
 import http from "node:http";
+import { insertCafe, insertReview, listCafes } from "./db.js";
 
 const port = Number(process.env.API_PORT || 3001);
 const naverSearchUrl = "https://naverapihub.apigw.ntruss.com/search/v1/local";
@@ -12,8 +13,53 @@ function sendJson(response, status, body) {
   response.end(JSON.stringify(body));
 }
 
+async function readJson(request) {
+  let body = "";
+  for await (const chunk of request) body += chunk;
+  return JSON.parse(body || "{}");
+}
+
+function getBounds(url) {
+  const values = ["minLat", "maxLat", "minLng", "maxLng"].map((key) => Number(url.searchParams.get(key)));
+  return values.every(Number.isFinite) ? Object.fromEntries(["minLat", "maxLat", "minLng", "maxLng"].map((key, index) => [key, values[index]])) : null;
+}
+
 const server = http.createServer(async (request, response) => {
   const requestUrl = new URL(request.url, `http://${request.headers.host}`);
+  if (requestUrl.pathname === "/api/cafes" && request.method === "GET") {
+    sendJson(response, 200, { cafes: listCafes(getBounds(requestUrl)) });
+    return;
+  }
+
+  if (requestUrl.pathname === "/api/cafes" && request.method === "POST") {
+    try {
+      const cafe = await readJson(request);
+      if (!cafe.name || !cafe.address || !Number.isFinite(Number(cafe.lat)) || !Number.isFinite(Number(cafe.lng))) {
+        sendJson(response, 400, { error: "카페명, 주소, 위치 정보가 필요합니다." });
+        return;
+      }
+      sendJson(response, 201, { cafe: insertCafe(cafe) });
+    } catch (error) {
+      sendJson(response, 400, { error: "카페 정보를 저장할 수 없습니다." });
+    }
+    return;
+  }
+
+  const reviewMatch = requestUrl.pathname.match(/^\/api\/cafes\/(\d+)\/reviews$/);
+  if (reviewMatch && request.method === "POST") {
+    try {
+      const review = await readJson(request);
+      if (!review.text && (!review.images || review.images.length === 0)) {
+        sendJson(response, 400, { error: "리뷰 내용 또는 사진이 필요합니다." });
+        return;
+      }
+      sendJson(response, 201, { review: insertReview(Number(reviewMatch[1]), review) });
+    } catch (error) {
+      sendJson(response, 400, { error: "리뷰를 저장할 수 없습니다." });
+    }
+    return;
+  }
+
   if (requestUrl.pathname !== "/api/places" || request.method !== "GET") {
     sendJson(response, 404, { error: "Not found" });
     return;

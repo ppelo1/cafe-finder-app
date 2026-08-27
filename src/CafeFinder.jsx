@@ -93,6 +93,11 @@ function inferDong(address, fallback = "") {
   return address.match(/[가-힣]+동/)?.[0] || fallback;
 }
 
+function cafeInViewport(cafe, viewport) {
+  return !viewport || (cafe.lat >= viewport.minLat && cafe.lat <= viewport.maxLat
+    && cafe.lng >= viewport.minLng && cafe.lng <= viewport.maxLng);
+}
+
 const DAYS = [
   { key: "mon", label: "월" }, { key: "tue", label: "화" }, { key: "wed", label: "수" },
   { key: "thu", label: "목" }, { key: "fri", label: "금" }, { key: "sat", label: "토" }, { key: "sun", label: "일" },
@@ -435,8 +440,18 @@ function CafeFinderInner() {
   const [openNowOnly, setOpenNowOnly] = useState(false);
   const [outletRangeFilter, setOutletRangeFilter] = useState(null);
   const [showOutletMenu, setShowOutletMenu] = useState(false);
+  const [mapViewport, setMapViewport] = useState(null);
 
   const mapStatus = useNaverMapsScript(NAVER_CONFIG.clientId);
+
+  useEffect(() => {
+    fetch("/api/cafes")
+      .then((response) => response.ok ? response.json() : null)
+      .then((data) => {
+        if (data?.cafes?.length) setCafes((current) => [...data.cafes, ...current]);
+      })
+      .catch((error) => console.warn("저장된 카페를 불러오지 못했습니다.", error));
+  }, []);
 
   const toggleFilter = (key) => {
     setActive((prev) => {
@@ -502,6 +517,15 @@ function CafeFinderInner() {
     return list;
   }, [active, cafes, query, openNowOnly, outletRangeFilter]);
 
+  const mapCafes = useMemo(() => {
+    if (!mapViewport) return filtered;
+    return filtered.filter((cafe) => cafeInViewport(cafe, mapViewport));
+  }, [filtered, mapViewport]);
+
+  const handleMapViewportChange = useCallback((viewport) => {
+    setMapViewport(viewport);
+  }, []);
+
   const selectCafe = (id) => {
     setSelected(id);
     setDetailCafeId(id);
@@ -511,7 +535,7 @@ function CafeFinderInner() {
     setPickedLoc({ lat, lng });
   }, []);
 
-  const submitCafe = (data) => {
+  const submitCafe = async (data) => {
     const loc = pickedLoc || { lat: 37.5535, lng: 126.914 }; // 위치 미지정 시 동네 중앙 기본값
     const newCafe = {
       id: Date.now(),
@@ -531,15 +555,35 @@ function CafeFinderInner() {
       lat: loc.lat,
       lng: loc.lng,
     };
-    setCafes((prev) => [newCafe, ...prev]);
+    try {
+      const response = await fetch("/api/cafes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(newCafe),
+      });
+      if (!response.ok) throw new Error("카페 저장 실패");
+      const savedCafe = (await response.json()).cafe;
+      setCafes((prev) => [savedCafe, ...prev]);
+      selectCafe(savedCafe.id);
+    } catch (error) {
+      console.error(error);
+      setCafes((prev) => [newCafe, ...prev]);
+      selectCafe(newCafe.id);
+    }
     setShowForm(false);
     setPickedLoc(null);
-    selectCafe(newCafe.id);
   };
 
-  const addReview = (cafeId, review) => {
+  const addReview = async (cafeId, review) => {
+    const response = await fetch(`/api/cafes/${cafeId}/reviews`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(review),
+    });
+    if (!response.ok) throw new Error("리뷰 저장 실패");
+    const savedReview = (await response.json()).review;
     setCafes((prev) => prev.map((cafe) => cafe.id === cafeId
-      ? { ...cafe, reviews: [...(cafe.reviews || []), review] }
+      ? { ...cafe, reviews: [savedReview, ...(cafe.reviews || [])] }
       : cafe));
   };
 
@@ -712,11 +756,11 @@ function CafeFinderInner() {
           </div>
         )}
 
-        {mobileTab === "map" && (
+          {mobileTab === "map" && (
           <div style={styles.mapPaneMobile}>
             {mapStatus === "ready" ? (
               <NaverRealMap
-                cafes={filtered}
+                cafes={mapCafes}
                 selected={selected}
                 hovered={hovered}
                 onSelect={selectCafe}
@@ -724,10 +768,11 @@ function CafeFinderInner() {
                 pickMode={showForm}
                 onPick={handleMapClickForForm}
                 pickedLoc={pickedLoc}
+                onViewportChange={handleMapViewportChange}
               />
             ) : (
               <MockMapView
-                cafes={filtered}
+                cafes={mapCafes}
                 selected={selected}
                 hovered={hovered}
                 onSelect={selectCafe}
@@ -735,6 +780,7 @@ function CafeFinderInner() {
                 pickMode={showForm}
                 onPick={handleMapClickForForm}
                 pickedLoc={pickedLoc}
+                onViewportChange={handleMapViewportChange}
               />
             )}
 
@@ -777,19 +823,31 @@ function CafeDetailModal({ cafe, onClose, onAddReview }) {
     setReviewImages(files.map((file) => ({ file, url: URL.createObjectURL(file) })));
   };
 
-  const submitReview = () => {
+  const fileToDataUrl = (file) => new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+
+  const submitReview = async () => {
     if (!reviewText.trim() && reviewImages.length === 0) return;
-    onAddReview(cafe.id, {
+    try {
+      const imageUrls = await Promise.all(reviewImages.map(({ file, url }) => file ? fileToDataUrl(file) : url));
+      await onAddReview(cafe.id, {
       id: Date.now(),
       rating: reviewRating,
       text: reviewText.trim(),
-      images: reviewImages.map(({ url }) => url),
+      images: imageUrls,
       createdAt: new Date().toLocaleDateString("ko-KR"),
-    });
-    setReviewText("");
-    setReviewRating(0);
-    setReviewImages([]);
-    setShowReviewComposer(false);
+      });
+      setReviewText("");
+      setReviewRating(0);
+      setReviewImages([]);
+      setShowReviewComposer(false);
+    } catch (error) {
+      console.error("리뷰 저장 실패:", error);
+    }
   };
 
   return (
@@ -1264,7 +1322,7 @@ function CafeForm({ pickedLoc, onCancel, onSubmit, mapStatus, onSetLoc }) {
 }
 
 /* ---------- 실제 네이버 지도 ---------- */
-function NaverRealMap({ cafes, selected, hovered, onSelect, onHover, pickMode, onPick, pickedLoc }) {
+function NaverRealMap({ cafes, selected, hovered, onSelect, onHover, pickMode, onPick, pickedLoc, onViewportChange }) {
   const mapRef = useRef(null);
   const mapObj = useRef(null);
   const markersRef = useRef({});
@@ -1272,9 +1330,12 @@ function NaverRealMap({ cafes, selected, hovered, onSelect, onHover, pickMode, o
   const boundsFitRef = useRef(false);
   const onSelectRef = useRef(onSelect);
   const onHoverRef = useRef(onHover);
+  const onViewportChangeRef = useRef(onViewportChange);
+  const initialIdleRef = useRef(true);
 
   useEffect(() => { onSelectRef.current = onSelect; }, [onSelect]);
   useEffect(() => { onHoverRef.current = onHover; }, [onHover]);
+  useEffect(() => { onViewportChangeRef.current = onViewportChange; }, [onViewportChange]);
 
   useEffect(() => {
     if (!window.naver || !mapRef.current || mapObj.current) return;
@@ -1287,6 +1348,27 @@ function NaverRealMap({ cafes, selected, hovered, onSelect, onHover, pickMode, o
     } catch (e) {
       console.error("네이버 지도 초기화 실패:", e);
     }
+  }, []);
+
+  useEffect(() => {
+    if (!mapObj.current || !window.naver) return;
+    const { naver } = window;
+    const map = mapObj.current;
+    const reportViewport = (isInitial = false) => {
+      const bounds = map.getBounds();
+      onViewportChangeRef.current({
+        minLat: bounds.getMin().lat(),
+        maxLat: bounds.getMax().lat(),
+        minLng: bounds.getMin().lng(),
+        maxLng: bounds.getMax().lng(),
+      }, isInitial);
+    };
+    const listener = naver.maps.Event.addListener(map, "idle", () => {
+      reportViewport(initialIdleRef.current);
+      initialIdleRef.current = false;
+    });
+    reportViewport(true);
+    return () => naver.maps.Event.removeListener(listener);
   }, []);
 
   // 카페 목록이 바뀔 때만 마커를 생성/제거 (호버·선택으로는 재생성하지 않음 - 줌 중 충돌 방지)
@@ -1405,7 +1487,10 @@ function NaverRealMap({ cafes, selected, hovered, onSelect, onHover, pickMode, o
 }
 
 /* ---------- 목업(일러스트) 지도 - Client ID 없을 때 대체 ---------- */
-function MockMapView({ cafes, selected, hovered, onSelect, onHover, pickMode, onPick, pickedLoc }) {
+function MockMapView({ cafes, selected, hovered, onSelect, onHover, pickMode, onPick, pickedLoc, onViewportChange }) {
+  useEffect(() => {
+    onViewportChange(BOUNDS, true);
+  }, [onViewportChange]);
   const handleBgClick = (e) => {
     if (!pickMode) return;
     const svg = e.currentTarget;
