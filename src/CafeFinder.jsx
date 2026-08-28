@@ -1499,16 +1499,21 @@ function NaverRealMap({ cafes, selected, hovered, onSelect, onHover, pickMode, o
         markersRef.current[idStr] = marker;
       });
 
+      // 목록에서 선택된 카페를 보여주려고 들어온 경우엔 전체를 다 담는
+      // fitBounds를 하지 않는다 - 아래 이동 effect가 그 카페로 줌인해서
+      // 이동시키는데, fitBounds가 그걸 덮어써서 "이동 안 하는" 것처럼 보였다.
       if (cafes.length > 0 && !boundsFitRef.current) {
-        const bounds = new naver.maps.LatLngBounds();
-        cafes.forEach((c) => bounds.extend(new naver.maps.LatLng(c.lat, c.lng)));
-        map.fitBounds(bounds);
+        if (selected == null) {
+          const bounds = new naver.maps.LatLngBounds();
+          cafes.forEach((c) => bounds.extend(new naver.maps.LatLng(c.lat, c.lng)));
+          map.fitBounds(bounds);
+        }
         boundsFitRef.current = true;
       }
     } catch (e) {
       console.error("마커 갱신 실패:", e);
     }
-  }, [cafes]);
+  }, [cafes, selected]);
 
   // 선택/호버 상태가 바뀔 때는 기존 마커의 아이콘만 교체 (재생성 없음)
   useEffect(() => {
@@ -1518,8 +1523,9 @@ function NaverRealMap({ cafes, selected, hovered, onSelect, onHover, pickMode, o
       Object.entries(markersRef.current).forEach(([idStr, marker]) => {
         const isSelected = String(selected) === idStr;
         const isHovered = String(hovered) === idStr;
+        const color = isSelected ? COLOR.teal : "#B5533C";
         marker.setIcon({
-          url: pinDataUrl("#B5533C", isSelected || isHovered),
+          url: pinDataUrl(color, isSelected || isHovered),
           size: new naver.maps.Size(30, 38),
           scaledSize: new naver.maps.Size(isSelected ? 38 : 28, isSelected ? 48 : 36),
           anchor: new naver.maps.Point(14, 34),
@@ -1530,13 +1536,19 @@ function NaverRealMap({ cafes, selected, hovered, onSelect, onHover, pickMode, o
     }
   }, [selected, hovered]);
 
-  // 목록에서 카페를 선택하면 지도에서도 실제로 보이도록 그 위치로 이동한다.
+  // 목록에서 카페를 선택하면 지도에서도 실제로 보이도록 그 위치로 확대 이동한다.
   useEffect(() => {
     if (!mapObj.current || !window.naver || selected == null) return;
     const target = cafes.find((c) => String(c.id) === String(selected));
     if (!target) return;
     try {
-      mapObj.current.panTo(new window.naver.maps.LatLng(target.lat, target.lng));
+      const coord = new window.naver.maps.LatLng(target.lat, target.lng);
+      if (typeof mapObj.current.morph === "function") {
+        mapObj.current.morph(coord, 17);
+      } else {
+        mapObj.current.setCenter(coord);
+        mapObj.current.setZoom(17);
+      }
     } catch (e) {
       console.error("지도 이동 실패:", e);
     }
@@ -1631,7 +1643,7 @@ function MockMapView({ cafes, selected, hovered, onSelect, onHover, pickMode, on
             style={{ cursor: "pointer" }}
           >
             <g transform={`translate(-2.6 -6.8) scale(${scale * 0.175})`}>
-              <PinIcon filled={isSelected || isHovered} color="#B5533C" />
+              <PinIcon filled={isSelected || isHovered} color={isSelected ? "#3D6B5F" : "#B5533C"} />
             </g>
             {(isSelected || isHovered) && (
               <g transform="translate(0 -9.5)">
