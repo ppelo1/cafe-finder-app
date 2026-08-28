@@ -455,6 +455,8 @@ function CafeFinderInner() {
   const savedListScrollRef = useRef(0);
   const filterBarRef = useRef(null);
   const filterDragRef = useRef({ active: false, startX: 0, startScrollLeft: 0, moved: false });
+  const overlayRef = useRef(null);
+  const [overlayHeight, setOverlayHeight] = useState(168);
   const [mobileTab, setMobileTab] = useState("map");
   const [queryInput, setQueryInput] = useState("");
   const [query, setQuery] = useState("");
@@ -593,6 +595,18 @@ function CafeFinderInner() {
     return () => cancelAnimationFrame(raf1);
   }, [mobileTab]);
 
+  // 검색창/필터/탭이 지도 위에 떠 있는 오버레이라 목록 첫 카드가
+  // 가려지지 않도록, 오버레이 실제 높이를 재서 목록 상단 여백으로 준다.
+  useLayoutEffect(() => {
+    const el = overlayRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const measure = () => setOverlayHeight(el.offsetHeight);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
   const selectCafe = (id) => {
     setSelected(id);
     setDetailCafeId(id);
@@ -666,117 +680,10 @@ function CafeFinderInner() {
         </button>
       </header>
 
-      <div style={styles.searchBar}>
-        <SearchIcon size={16} color={COLOR.inkSoft} />
-        <input
-          style={styles.searchInput}
-          value={queryInput}
-          onChange={(e) => setQueryInput(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              setActive(new Set());
-              setOpenNowOnly(false);
-              setOutletRangeFilter(null);
-              setQuery(queryInput.trim());
-            }
-          }}
-          placeholder="카페 이름, 동네로 검색 후 Enter"
-        />
-        {queryInput && (
-          <button
-            style={styles.searchClearBtn}
-            onClick={() => { setQueryInput(""); setQuery(""); }}
-            aria-label="검색어 지우기"
-          >
-            ✕
-          </button>
-        )}
-      </div>
-
-      <div style={styles.filterBarWrap}>
-        <div
-          ref={filterBarRef}
-          style={styles.filterBar}
-          className="cf-filterbar"
-          onMouseDown={handleFilterMouseDown}
-          onMouseMove={handleFilterMouseMove}
-          onMouseUp={handleFilterMouseUp}
-          onMouseLeave={handleFilterMouseUp}
-          onClick={handleFilterClick}
-        >
-          <button
-            onClick={() => setOpenNowOnly((v) => !v)}
-            style={{ ...styles.filterChip, ...(openNowOnly ? styles.filterChipActive : {}) }}
-          >
-            <ClockIcon size={15} color={openNowOnly ? "#FFFDF8" : "#5B5648"} />
-            지금 영업중
-          </button>
-          {FILTERS.filter(({ key }) => key !== "outlet").map(({ key, label, icon: Icon }) => {
-            const isActive = active.has(key);
-            return (
-              <button
-                key={key}
-                onClick={() => toggleFilter(key)}
-                style={{ ...styles.filterChip, ...(isActive ? styles.filterChipActive : {}) }}
-              >
-                <Icon size={15} color={isActive ? "#FFFDF8" : "#5B5648"} />
-                {label}
-              </button>
-            );
-          })}
-          <button
-            onClick={() => setShowOutletMenu((value) => !value)}
-            style={{ ...styles.filterChip, ...(outletRangeFilter ? styles.filterChipActive : {}) }}
-            aria-expanded={showOutletMenu}
-          >
-            <OutletIcon size={15} color={outletRangeFilter ? "#FFFDF8" : "#5B5648"} />
-            {outletRangeFilter === "any" ? "콘센트 있음" : outletRangeFilter ? `콘센트 ${OUTLET_RANGES.find(({ value }) => value === outletRangeFilter)?.label}` : "콘센트"}
-          </button>
-          {(active.size > 0 || openNowOnly || outletRangeFilter) && (
-            <button onClick={() => { setActive(new Set()); setOpenNowOnly(false); setOutletRangeFilter(null); }} style={styles.resetBtn}>초기화</button>
-          )}
-        </div>
-        {showOutletMenu && (
-          <div style={styles.outletFilterMenu}>
-            <strong style={styles.outletFilterTitle}>콘센트 있는 좌석 수</strong>
-            <div style={styles.outletFilterOptions}>
-              <button type="button" style={{ ...styles.outletFilterOption, ...(outletRangeFilter === "any" ? styles.outletFilterOptionActive : {}) }} onClick={() => toggleOutletRangeFilter("any")}>전체</button>
-              {OUTLET_RANGES.filter(({ value }) => !["none", "unknown"].includes(value)).map(({ value, label }) => (
-                <button key={value} type="button" style={{ ...styles.outletFilterOption, ...(outletRangeFilter === value ? styles.outletFilterOptionActive : {}) }} onClick={() => toggleOutletRangeFilter(value)}>{label}</button>
-              ))}
-            </div>
-          </div>
-        )}
-        <div style={styles.filterBarFade} />
-      </div>
-
-      {mapStatus !== "ready" && (
-        <div style={styles.mapNotice}>
-          {NAVER_CONFIG.clientId
-            ? "네이버 지도를 불러오는 중이거나 연결에 실패했어요. 지금은 목업 지도로 표시됩니다."
-            : "네이버 지도 Client ID가 설정되지 않아 목업 지도로 표시 중이에요. 코드 상단 NAVER_CONFIG.clientId를 채우면 실제 지도로 전환돼요."}
-        </div>
-      )}
-
-      <div style={styles.mobileTabBar}>
-        <button
-          style={{ ...styles.mobileTabBtn, ...(mobileTab === "map" ? styles.mobileTabBtnActive : {}) }}
-          onClick={() => setMobileTab("map")}
-        >
-          지도
-        </button>
-        <button
-          style={{ ...styles.mobileTabBtn, ...(mobileTab === "list" ? styles.mobileTabBtnActive : {}) }}
-          onClick={() => setMobileTab("list")}
-        >
-          목록 ({filtered.length})
-        </button>
-      </div>
-
       <div style={styles.mainMobile}>
         <div
           ref={listScrollRef}
-          style={{ ...styles.listPaneMobile, display: mobileTab === "list" ? "flex" : "none" }}
+          style={{ ...styles.listPaneMobile, paddingTop: overlayHeight + 12, display: mobileTab === "list" ? "flex" : "none" }}
         >
             {filtered.length === 0 && (
               <div style={styles.emptyState}>
@@ -845,6 +752,115 @@ function CafeFinderInner() {
               onViewportChange={handleMapViewportChange}
             />
           )}
+        </div>
+
+        <div ref={overlayRef} style={styles.overlayControls}>
+          <div style={styles.searchBar}>
+            <SearchIcon size={16} color={COLOR.inkSoft} />
+            <input
+              style={styles.searchInput}
+              value={queryInput}
+              onChange={(e) => setQueryInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  setActive(new Set());
+                  setOpenNowOnly(false);
+                  setOutletRangeFilter(null);
+                  setQuery(queryInput.trim());
+                }
+              }}
+              placeholder="카페 이름, 동네로 검색 후 Enter"
+            />
+            {queryInput && (
+              <button
+                style={styles.searchClearBtn}
+                onClick={() => { setQueryInput(""); setQuery(""); }}
+                aria-label="검색어 지우기"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+
+          <div style={styles.filterBarWrap}>
+            <div
+              ref={filterBarRef}
+              style={styles.filterBar}
+              className="cf-filterbar"
+              onMouseDown={handleFilterMouseDown}
+              onMouseMove={handleFilterMouseMove}
+              onMouseUp={handleFilterMouseUp}
+              onMouseLeave={handleFilterMouseUp}
+              onClick={handleFilterClick}
+            >
+              <button
+                onClick={() => setOpenNowOnly((v) => !v)}
+                style={{ ...styles.filterChip, ...(openNowOnly ? styles.filterChipActive : {}) }}
+              >
+                <ClockIcon size={15} color={openNowOnly ? "#FFFDF8" : "#5B5648"} />
+                지금 영업중
+              </button>
+              {FILTERS.filter(({ key }) => key !== "outlet").map(({ key, label, icon: Icon }) => {
+                const isActive = active.has(key);
+                return (
+                  <button
+                    key={key}
+                    onClick={() => toggleFilter(key)}
+                    style={{ ...styles.filterChip, ...(isActive ? styles.filterChipActive : {}) }}
+                  >
+                    <Icon size={15} color={isActive ? "#FFFDF8" : "#5B5648"} />
+                    {label}
+                  </button>
+                );
+              })}
+              <button
+                onClick={() => setShowOutletMenu((value) => !value)}
+                style={{ ...styles.filterChip, ...(outletRangeFilter ? styles.filterChipActive : {}) }}
+                aria-expanded={showOutletMenu}
+              >
+                <OutletIcon size={15} color={outletRangeFilter ? "#FFFDF8" : "#5B5648"} />
+                {outletRangeFilter === "any" ? "콘센트 있음" : outletRangeFilter ? `콘센트 ${OUTLET_RANGES.find(({ value }) => value === outletRangeFilter)?.label}` : "콘센트"}
+              </button>
+              {(active.size > 0 || openNowOnly || outletRangeFilter) && (
+                <button onClick={() => { setActive(new Set()); setOpenNowOnly(false); setOutletRangeFilter(null); }} style={styles.resetBtn}>초기화</button>
+              )}
+            </div>
+            {showOutletMenu && (
+              <div style={styles.outletFilterMenu}>
+                <strong style={styles.outletFilterTitle}>콘센트 있는 좌석 수</strong>
+                <div style={styles.outletFilterOptions}>
+                  <button type="button" style={{ ...styles.outletFilterOption, ...(outletRangeFilter === "any" ? styles.outletFilterOptionActive : {}) }} onClick={() => toggleOutletRangeFilter("any")}>전체</button>
+                  {OUTLET_RANGES.filter(({ value }) => !["none", "unknown"].includes(value)).map(({ value, label }) => (
+                    <button key={value} type="button" style={{ ...styles.outletFilterOption, ...(outletRangeFilter === value ? styles.outletFilterOptionActive : {}) }} onClick={() => toggleOutletRangeFilter(value)}>{label}</button>
+                  ))}
+                </div>
+              </div>
+            )}
+            <div style={styles.filterBarFade} />
+          </div>
+
+          {mapStatus !== "ready" && (
+            <div style={styles.mapNotice}>
+              {NAVER_CONFIG.clientId
+                ? "네이버 지도를 불러오는 중이거나 연결에 실패했어요. 지금은 목업 지도로 표시됩니다."
+                : "네이버 지도 Client ID가 설정되지 않아 목업 지도로 표시 중이에요. 코드 상단 NAVER_CONFIG.clientId를 채우면 실제 지도로 전환돼요."}
+            </div>
+          )}
+
+          <div style={styles.mobileTabBar}>
+            <button
+              style={{ ...styles.mobileTabBtn, ...(mobileTab === "map" ? styles.mobileTabBtnActive : {}) }}
+              onClick={() => setMobileTab("map")}
+            >
+              지도
+            </button>
+            <button
+              style={{ ...styles.mobileTabBtn, ...(mobileTab === "list" ? styles.mobileTabBtnActive : {}) }}
+              onClick={() => setMobileTab("list")}
+            >
+              목록 ({filtered.length})
+            </button>
+          </div>
         </div>
       </div>
 
@@ -1848,11 +1864,12 @@ const styles = {
     flexDirection: "column",
     boxShadow: "0 0 44px rgba(38,36,31,0.14)",
   },
-  header: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "18px 16px 12px" },
-  eyebrow: { margin: 0, fontSize: 11.5, letterSpacing: "0.12em", color: COLOR.accent, fontWeight: 600 },
-  title: { margin: "2px 0 0", fontFamily: "'Noto Serif KR', serif", fontSize: 24, fontWeight: 700, letterSpacing: "-0.01em" },
-  addBtn: { padding: "9px 14px", borderRadius: 999, border: "none", background: COLOR.ink, color: "#FFFDF8", fontSize: 12.5, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" },
-  searchBar: { display: "flex", alignItems: "center", gap: 8, margin: "0 16px 10px", padding: "10px 12px", borderRadius: 12, border: `1px solid ${COLOR.border}`, background: COLOR.surface },
+  header: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "10px 16px 6px" },
+  eyebrow: { margin: 0, fontSize: 10, letterSpacing: "0.12em", color: COLOR.accent, fontWeight: 600 },
+  title: { margin: "1px 0 0", fontFamily: "'Noto Serif KR', serif", fontSize: 19, fontWeight: 700, letterSpacing: "-0.01em" },
+  addBtn: { padding: "7px 12px", borderRadius: 999, border: "none", background: COLOR.ink, color: "#FFFDF8", fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" },
+  overlayControls: { position: "absolute", top: 0, left: 0, right: 0, zIndex: 30, paddingTop: 10 },
+  searchBar: { display: "flex", alignItems: "center", gap: 8, margin: "0 16px 10px", padding: "10px 12px", borderRadius: 12, border: `1px solid ${COLOR.border}`, background: COLOR.surface, boxShadow: "0 6px 16px rgba(38,36,31,0.14)" },
   searchInput: { flex: 1, border: "none", outline: "none", background: "transparent", fontSize: 15, color: COLOR.ink, fontFamily: "'Noto Sans KR', sans-serif" },
   searchClearBtn: { border: "none", background: "transparent", color: COLOR.inkSoft, fontSize: 13, cursor: "pointer", padding: 2 },
   filterBarWrap: { position: "relative", margin: "0 0 12px" },
@@ -1890,8 +1907,8 @@ const styles = {
   mobileTabBar: { display: "flex", gap: 8, padding: "0 16px 10px" },
   mobileTabBtn: { flex: 1, padding: "10px 0", borderRadius: 10, border: `1px solid ${COLOR.border}`, background: COLOR.surface, color: COLOR.ink, fontSize: 14, fontWeight: 600, cursor: "pointer" },
   mobileTabBtnActive: { background: COLOR.ink, borderColor: COLOR.ink, color: "#FFFDF8" },
-  mainMobile: { flex: 1, minHeight: 0, display: "flex", flexDirection: "column" },
-  listPaneMobile: { flex: 1, minHeight: 0, overflowY: "auto", display: "flex", flexDirection: "column", gap: 10, padding: "0 16px 24px" },
+  mainMobile: { flex: 1, minHeight: 0, position: "relative" },
+  listPaneMobile: { position: "absolute", inset: 0, overflowY: "auto", display: "flex", flexDirection: "column", gap: 10, padding: "0 16px 24px" },
   emptyState: { padding: "40px 20px", textAlign: "center", color: COLOR.inkSoft, fontSize: 13.5, background: COLOR.surface, borderRadius: 14, border: `1px dashed ${COLOR.border}` },
   card: { background: COLOR.surface, border: `1px solid ${COLOR.border}`, borderRadius: 14, padding: "14px 16px", cursor: "pointer", transition: "border-color 0.15s ease" },
   cardSelected: { borderColor: COLOR.accent, boxShadow: `0 0 0 1px ${COLOR.accent}` },
@@ -1905,7 +1922,7 @@ const styles = {
   cardMeta: { fontSize: 11.5, color: COLOR.inkSoft },
   openBadge: { marginLeft: 6, padding: "1px 7px", borderRadius: 999, background: COLOR.tealSoft, color: COLOR.teal, fontWeight: 600, fontSize: 10.5 },
   closedBadge: { marginLeft: 6, padding: "1px 7px", borderRadius: 999, background: "#EDE3DD", color: "#9B7A68", fontWeight: 600, fontSize: 10.5 },
-  mapPaneMobile: { flex: 1, minHeight: 0, position: "relative", overflow: "hidden" },
+  mapPaneMobile: { position: "absolute", inset: 0, overflow: "hidden" },
   mapSvg: { width: "100%", height: "100%", display: "block" },
   detailOverlay: { position: "fixed", inset: 0, zIndex: 60, display: "flex", alignItems: "center", justifyContent: "center", padding: 12, background: "rgba(38,36,31,0.5)" },
   detailModal: { width: "100%", maxWidth: 560, maxHeight: "94vh", overflowY: "auto", overscrollBehaviorY: "contain", padding: 20, borderRadius: 18, background: COLOR.surface, boxShadow: "0 10px 30px rgba(38,36,31,0.22)" },
