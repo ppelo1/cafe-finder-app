@@ -1413,11 +1413,15 @@ function NaverRealMap({ cafes, allCafes, selected, hovered, onSelect, onHover, p
   const onSelectRef = useRef(onSelect);
   const onHoverRef = useRef(onHover);
   const onViewportChangeRef = useRef(onViewportChange);
+  const selectedRef = useRef(selected);
+  const hoveredRef = useRef(hovered);
   const initialIdleRef = useRef(true);
 
   useEffect(() => { onSelectRef.current = onSelect; }, [onSelect]);
   useEffect(() => { onHoverRef.current = onHover; }, [onHover]);
   useEffect(() => { onViewportChangeRef.current = onViewportChange; }, [onViewportChange]);
+  useEffect(() => { selectedRef.current = selected; }, [selected]);
+  useEffect(() => { hoveredRef.current = hovered; }, [hovered]);
 
   useEffect(() => {
     if (!window.naver || !mapRef.current || mapObj.current) return;
@@ -1473,13 +1477,18 @@ function NaverRealMap({ cafes, allCafes, selected, hovered, onSelect, onHover, p
           markersRef.current[idStr].setPosition(new naver.maps.LatLng(c.lat, c.lng));
           return;
         }
+        // 새로 생기는 마커도 지금 선택/호버 상태를 바로 반영해야 한다 -
+        // 지도가 목록 선택으로 다른 동네로 이동해서 뷰포트에 막 들어온
+        // 마커가 항상 기본색으로만 생성되던 문제.
+        const idIsSelected = String(selectedRef.current) === idStr;
+        const idIsHovered = String(hoveredRef.current) === idStr;
         const marker = new naver.maps.Marker({
           position: new naver.maps.LatLng(c.lat, c.lng),
           map,
           icon: {
-            url: pinDataUrl("#B5533C", false),
+            url: pinDataUrl(idIsSelected ? COLOR.teal : "#B5533C", idIsSelected || idIsHovered),
             size: new naver.maps.Size(30, 38),
-            scaledSize: new naver.maps.Size(28, 36),
+            scaledSize: new naver.maps.Size(idIsSelected ? 38 : 28, idIsSelected ? 48 : 36),
             anchor: new naver.maps.Point(14, 34),
           },
         });
