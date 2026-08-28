@@ -451,6 +451,8 @@ function CafeFinderInner() {
   const [showForm, setShowForm] = useState(false);
   const [pickedLoc, setPickedLoc] = useState(null); // {lat,lng} 지도 클릭으로 지정
   const cardRefs = useRef({});
+  const listScrollRef = useRef(null);
+  const savedListScrollRef = useRef(0);
   const filterBarRef = useRef(null);
   const filterDragRef = useRef({ active: false, startX: 0, startScrollLeft: 0, moved: false });
   const [mobileTab, setMobileTab] = useState("map");
@@ -554,6 +556,14 @@ function CafeFinderInner() {
   const handleMapViewportChange = useCallback((viewport) => {
     setMapViewport(viewport);
   }, []);
+
+  // 지도 보고 목록으로 돌아왔을 때 스크롤이 맨 위로 리셋되지 않도록
+  // 마지막으로 있던 위치를 복원한다.
+  useEffect(() => {
+    if (mobileTab === "list" && listScrollRef.current) {
+      listScrollRef.current.scrollTop = savedListScrollRef.current;
+    }
+  }, [mobileTab]);
 
   const selectCafe = (id) => {
     setSelected(id);
@@ -735,7 +745,11 @@ function CafeFinderInner() {
       </div>
 
       <div style={styles.mainMobile}>
-        <div style={{ ...styles.listPaneMobile, display: mobileTab === "list" ? "flex" : "none" }}>
+        <div
+          ref={listScrollRef}
+          onScroll={(e) => { savedListScrollRef.current = e.currentTarget.scrollTop; }}
+          style={{ ...styles.listPaneMobile, display: mobileTab === "list" ? "flex" : "none" }}
+        >
             {filtered.length === 0 && (
               <div style={styles.emptyState}>
                 {query ? `'${query}'에 맞는 카페가 없어요.` : "조건에 맞는 카페가 없어요. 필터를 줄여보세요."}
