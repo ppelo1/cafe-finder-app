@@ -745,16 +745,6 @@ function CafeFinderInner() {
         </div>
 
         <div ref={overlayRef} style={styles.overlayControls}>
-          <div style={styles.brandRow}>
-            <div style={styles.logoBadge}>
-              <span aria-hidden="true">☕</span>
-              카페찾기
-            </div>
-            <button style={styles.addBtn} onClick={() => { setPickedLoc(null); setShowForm(true); }}>
-              + 카페 등록
-            </button>
-          </div>
-
           <div style={styles.searchBar}>
             <SearchIcon size={16} color={COLOR.inkSoft} />
             <input
@@ -780,6 +770,16 @@ function CafeFinderInner() {
                 ✕
               </button>
             )}
+          </div>
+
+          <div style={styles.brandRow}>
+            <div style={styles.logoBadge}>
+              <span aria-hidden="true">☕</span>
+              카페찾기
+            </div>
+            <button style={styles.addBtn} onClick={() => { setPickedLoc(null); setShowForm(true); }}>
+              + 카페 등록
+            </button>
           </div>
 
           <div style={styles.filterBarWrap}>
