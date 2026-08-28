@@ -558,11 +558,17 @@ function CafeFinderInner() {
   }, []);
 
   // 지도 보고 목록으로 돌아왔을 때 스크롤이 맨 위로 리셋되지 않도록
-  // 마지막으로 있던 위치를 복원한다.
+  // 마지막으로 있던 위치를 복원한다. display:none -> flex로 막 전환된
+  // 직후엔 일부 모바일 브라우저가 scrollTop 대입을 바로 반영하지 않아서
+  // 한 프레임 미뤄서 다시 한 번 적용한다.
   useEffect(() => {
-    if (mobileTab === "list" && listScrollRef.current) {
-      listScrollRef.current.scrollTop = savedListScrollRef.current;
-    }
+    if (mobileTab !== "list" || !listScrollRef.current) return;
+    const el = listScrollRef.current;
+    el.scrollTop = savedListScrollRef.current;
+    const raf = requestAnimationFrame(() => {
+      el.scrollTop = savedListScrollRef.current;
+    });
+    return () => cancelAnimationFrame(raf);
   }, [mobileTab]);
 
   const selectCafe = (id) => {
