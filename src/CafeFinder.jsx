@@ -879,6 +879,30 @@ function CafeDetailModal({ cafe, onClose, onAddReview }) {
   const [selectedPhotoIndex, setSelectedPhotoIndex] = useState(null);
   const [submittingReview, setSubmittingReview] = useState(false);
   const [reviewSubmitError, setReviewSubmitError] = useState("");
+  const swipeStartRef = useRef({ x: 0, y: 0 });
+  const swipedRef = useRef(false);
+
+  const handlePhotoTouchStart = (event) => {
+    const t = event.touches[0];
+    swipeStartRef.current = { x: t.clientX, y: t.clientY };
+    swipedRef.current = false;
+  };
+  const handlePhotoTouchMove = (event) => {
+    const t = event.touches[0];
+    const dx = t.clientX - swipeStartRef.current.x;
+    const dy = t.clientY - swipeStartRef.current.y;
+    if (Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy)) swipedRef.current = true;
+  };
+  const handlePhotoTouchEnd = (event) => {
+    if (!swipedRef.current || reviewPhotoList.length < 2) return;
+    const t = event.changedTouches[0];
+    const dx = t.clientX - swipeStartRef.current.x;
+    if (Math.abs(dx) > 40) {
+      setSelectedPhotoIndex((current) => (
+        dx < 0 ? (current + 1) % reviewPhotoList.length : (current - 1 + reviewPhotoList.length) % reviewPhotoList.length
+      ));
+    }
+  };
 
   const handleReviewImages = (event) => {
     const files = Array.from(event.target.files || []).slice(0, 5);
@@ -1060,7 +1084,13 @@ function CafeDetailModal({ cafe, onClose, onAddReview }) {
         </div>
       )}
       {selectedPhotoIndex !== null && (
-        <div style={styles.photoViewerOverlay} onClick={() => setSelectedPhotoIndex(null)}>
+        <div
+          style={styles.photoViewerOverlay}
+          onClick={() => { if (swipedRef.current) { swipedRef.current = false; return; } setSelectedPhotoIndex(null); }}
+          onTouchStart={handlePhotoTouchStart}
+          onTouchMove={handlePhotoTouchMove}
+          onTouchEnd={handlePhotoTouchEnd}
+        >
           <button type="button" style={styles.photoViewerClose} onClick={() => setSelectedPhotoIndex(null)} aria-label="사진 닫기">×</button>
           {reviewPhotoList.length > 1 && (
             <button type="button" style={{ ...styles.photoViewerNav, ...styles.photoViewerPrev }} onClick={(event) => { event.stopPropagation(); setSelectedPhotoIndex((selectedPhotoIndex - 1 + reviewPhotoList.length) % reviewPhotoList.length); }} aria-label="이전 사진">‹</button>
