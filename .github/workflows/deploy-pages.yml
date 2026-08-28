@@ -28,6 +28,8 @@ jobs:
       - run: npm run build
         env:
           GITHUB_PAGES: "true"
+          VITE_NAVER_SEARCH_CLIENT_ID: ${{ secrets.VITE_NAVER_SEARCH_CLIENT_ID }}
+          VITE_NAVER_SEARCH_CLIENT_SECRET: ${{ secrets.VITE_NAVER_SEARCH_CLIENT_SECRET }}
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

@@ -11,6 +11,46 @@ const NAVER_CONFIG = {
   clientId: "tkv9djbq39",
 };
 
+/* =========================================================================
+   네이버 장소 검색(등록 화면) 연동 안내 - GitHub Pages처럼 백엔드 서버가 없는
+   환경에서는 브라우저가 네이버 검색 API를 직접 호출합니다.
+   1) https://www.ncloud.com -> Console -> AI·NAVER API -> Search 신청
+   2) 발급받은 Client ID/Secret을 빌드 시 환경변수로 주입하세요
+      (예: GitHub Actions 저장소 Secret에 VITE_NAVER_SEARCH_CLIENT_ID /
+      VITE_NAVER_SEARCH_CLIENT_SECRET 등록 후 build 스텝 env로 전달)
+   3) 이 방식은 Client Secret이 빌드된 JS 번들에 그대로 노출되므로
+      개인/테스트 용도로만 사용하세요
+   ========================================================================= */
+const NAVER_SEARCH_CONFIG = {
+  clientId: import.meta.env.VITE_NAVER_SEARCH_CLIENT_ID || "",
+  clientSecret: import.meta.env.VITE_NAVER_SEARCH_CLIENT_SECRET || "",
+};
+
+async function fetchNaverPlaces(query) {
+  const url = `https://naverapihub.apigw.ntruss.com/search/v1/local?query=${encodeURIComponent(query)}&display=5&sort=random`;
+  const response = await fetch(url, {
+    headers: {
+      "X-NCP-APIGW-API-KEY-ID": NAVER_SEARCH_CONFIG.clientId,
+      "X-NCP-APIGW-API-KEY": NAVER_SEARCH_CONFIG.clientSecret,
+    },
+  });
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.errorMessage || "네이버 장소 검색에 실패했습니다.");
+  }
+  return (data.items || []).map((item) => ({
+    name: item.title.replace(/<[^>]*>/g, ""),
+    address: item.roadAddress || item.address,
+    roadAddress: item.roadAddress,
+    jibunAddress: item.address,
+    category: item.category,
+    link: item.link,
+    phone: item.telephone,
+    lat: Number(item.mapy) / 10000000,
+    lng: Number(item.mapx) / 10000000,
+  }));
+}
+
 /* 목업 지도용 좌표 변환 기준 박스 (마포구 연남·합정·망원·상수 일대 근사치) */
 const BOUNDS = { minLat: 37.541, maxLat: 37.560, minLng: 126.905, maxLng: 126.925 };
 function latLngToXY(lat, lng) {
@@ -1050,15 +1090,21 @@ function CafeForm({ pickedLoc, onCancel, onSubmit, mapStatus, onSetLoc }) {
     setPlaceSearching(true);
     setGeocodeFailed(false);
     try {
-      const response = await fetch(`/api/places?query=${encodeURIComponent(query)}`);
-      const data = await response.json();
+      const places = NAVER_SEARCH_CONFIG.clientId
+        ? await fetchNaverPlaces(query)
+        : await (async () => {
+            const response = await fetch(`/api/places?query=${encodeURIComponent(query)}`);
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error || "네이버 장소 검색에 실패했습니다.");
+            return data.places || [];
+          })();
       setPlaceSearching(false);
-      if (!response.ok || !data.places?.length) {
+      if (!places.length) {
         setGeocodeFailed(true);
         setPlaceResults([]);
         return;
       }
-      setPlaceResults(data.places);
+      setPlaceResults(places);
     } catch (error) {
       console.error("장소 검색 실패:", error);
       setPlaceSearching(false);
