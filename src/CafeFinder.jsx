@@ -557,19 +557,37 @@ function CafeFinderInner() {
     setMapViewport(viewport);
   }, []);
 
+  // 목록 div 자체(overflowY:auto)는 내용이 실제로는 넘치지 않아 항상
+  // scrollTop 0이고, 실제 스크롤은 페이지(window/html)에서 일어난다 -
+  // 그래서 el.scrollTop만 저장/복원해서는 계속 안 먹혔다. 목록 div가
+  // 실제로 넘치는 경우(예: 더 큰 화면)엔 그쪽을, 아니면 window를 쓴다.
+  const isListElementScrollable = () => {
+    const el = listScrollRef.current;
+    return el && el.scrollHeight > el.clientHeight;
+  };
+  const getListScrollPosition = () => (
+    isListElementScrollable() ? listScrollRef.current.scrollTop : window.scrollY
+  );
+  const setListScrollPosition = (value) => {
+    if (isListElementScrollable()) {
+      listScrollRef.current.scrollTop = value;
+    } else {
+      window.scrollTo(0, value);
+    }
+  };
+
   // 지도 보고 목록으로 돌아왔을 때 스크롤이 맨 위로 리셋되지 않도록
   // 마지막으로 있던 위치를 복원한다. useLayoutEffect로 화면에 그려지기
   // 전에 동기적으로 우선 적용하고, 그 즉시 적용이 무시되는 기기가 있어
   // rAF로 한 번 더(그래도 밀리면 다음 rAF에서 한 번 더) 재적용한다.
   useLayoutEffect(() => {
-    if (mobileTab !== "list" || !listScrollRef.current) return;
-    const el = listScrollRef.current;
+    if (mobileTab !== "list") return;
     const target = savedListScrollRef.current;
-    el.scrollTop = target;
+    setListScrollPosition(target);
     let raf1 = requestAnimationFrame(() => {
-      el.scrollTop = target;
+      setListScrollPosition(target);
       raf1 = requestAnimationFrame(() => {
-        el.scrollTop = target;
+        setListScrollPosition(target);
       });
     });
     return () => cancelAnimationFrame(raf1);
@@ -581,9 +599,7 @@ function CafeFinderInner() {
   };
 
   const showCafeOnMap = (id) => {
-    if (listScrollRef.current) {
-      savedListScrollRef.current = listScrollRef.current.scrollTop;
-    }
+    savedListScrollRef.current = getListScrollPosition();
     setSelected(id);
     setMobileTab("map");
   };
@@ -760,7 +776,6 @@ function CafeFinderInner() {
       <div style={styles.mainMobile}>
         <div
           ref={listScrollRef}
-          onScroll={(e) => { savedListScrollRef.current = e.currentTarget.scrollTop; }}
           style={{ ...styles.listPaneMobile, display: mobileTab === "list" ? "flex" : "none" }}
         >
             {filtered.length === 0 && (
