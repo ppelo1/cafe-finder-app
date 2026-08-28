@@ -870,6 +870,54 @@ function CafeDetailModal({ cafe, onClose, onAddReview }) {
   const openState = isOpenNow(cafe.hours, cafe.weeklyHours);
   const naverMapUrl = `https://map.naver.com/v5/?c=${cafe.lng},${cafe.lat},15,0,0,0,dh`;
   const reviewPhotoList = (cafe.reviews || []).flatMap((review) => review.images || []);
+  const detailModalRef = useRef(null);
+  const detailDragRef = useRef({ startY: 0, dragging: false });
+  const [detailDragOffset, setDetailDragOffset] = useState(0);
+
+  // 아래로 끌어서 닫기 - 모달이 맨 위로 스크롤돼 있을 때만 시작하고,
+  // 브라우저의 당겨서 새로고침(pull-to-refresh)과 충돌하지 않도록
+  // 드래그 중엔 preventDefault로 막는다. React의 onTouchMove는 기본
+  // passive라 preventDefault가 안 먹어서 네이티브 리스너로 직접 붙인다.
+  useEffect(() => {
+    const el = detailModalRef.current;
+    if (!el) return;
+    const onTouchStart = (event) => {
+      if (el.scrollTop > 0) {
+        detailDragRef.current.dragging = false;
+        return;
+      }
+      detailDragRef.current = { startY: event.touches[0].clientY, dragging: true };
+    };
+    const onTouchMove = (event) => {
+      if (!detailDragRef.current.dragging) return;
+      const dy = event.touches[0].clientY - detailDragRef.current.startY;
+      if (dy > 0) {
+        event.preventDefault();
+        setDetailDragOffset(dy);
+      } else {
+        detailDragRef.current.dragging = false;
+        setDetailDragOffset(0);
+      }
+    };
+    const onTouchEnd = () => {
+      if (!detailDragRef.current.dragging) return;
+      detailDragRef.current.dragging = false;
+      setDetailDragOffset((current) => {
+        if (current > 90) {
+          onClose();
+        }
+        return 0;
+      });
+    };
+    el.addEventListener("touchstart", onTouchStart, { passive: true });
+    el.addEventListener("touchmove", onTouchMove, { passive: false });
+    el.addEventListener("touchend", onTouchEnd, { passive: true });
+    return () => {
+      el.removeEventListener("touchstart", onTouchStart);
+      el.removeEventListener("touchmove", onTouchMove);
+      el.removeEventListener("touchend", onTouchEnd);
+    };
+  }, [onClose]);
   const [reviewText, setReviewText] = useState("");
   const [reviewRating, setReviewRating] = useState(0);
   const [reviewImages, setReviewImages] = useState([]);
@@ -971,7 +1019,16 @@ function CafeDetailModal({ cafe, onClose, onAddReview }) {
 
   return (
     <div style={styles.detailOverlay} onClick={onClose}>
-      <div style={styles.detailModal} onClick={(event) => event.stopPropagation()}>
+      <div
+        ref={detailModalRef}
+        style={{
+          ...styles.detailModal,
+          transform: detailDragOffset ? `translateY(${detailDragOffset}px)` : undefined,
+          transition: detailDragOffset ? "none" : "transform 0.2s ease",
+          opacity: detailDragOffset ? Math.max(1 - detailDragOffset / 300, 0.5) : 1,
+        }}
+        onClick={(event) => event.stopPropagation()}
+      >
         <div style={styles.detailHeader}>
           <div>
             <p style={styles.detailEyebrow}>카페 상세 정보</p>
@@ -1851,7 +1908,7 @@ const styles = {
   mapPaneMobile: { flex: 1, minHeight: 0, position: "relative", overflow: "hidden" },
   mapSvg: { width: "100%", height: "100%", display: "block" },
   detailOverlay: { position: "fixed", inset: 0, zIndex: 60, display: "flex", alignItems: "center", justifyContent: "center", padding: 12, background: "rgba(38,36,31,0.5)" },
-  detailModal: { width: "100%", maxWidth: 560, maxHeight: "94vh", overflowY: "auto", padding: 20, borderRadius: 18, background: COLOR.surface, boxShadow: "0 10px 30px rgba(38,36,31,0.22)" },
+  detailModal: { width: "100%", maxWidth: 560, maxHeight: "94vh", overflowY: "auto", overscrollBehaviorY: "contain", padding: 20, borderRadius: 18, background: COLOR.surface, boxShadow: "0 10px 30px rgba(38,36,31,0.22)" },
   detailHeader: { display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10 },
   detailEyebrow: { margin: 0, color: COLOR.accent, fontSize: 11.5, fontWeight: 600 },
   detailTitle: { margin: "3px 0 0", fontFamily: "'Noto Serif KR', serif", fontSize: 22 },
