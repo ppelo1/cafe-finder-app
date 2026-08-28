@@ -560,6 +560,11 @@ function CafeFinderInner() {
     setDetailCafeId(id);
   };
 
+  const showCafeOnMap = (id) => {
+    setSelected(id);
+    setMobileTab("map");
+  };
+
   const handleMapClickForForm = useCallback((lat, lng) => {
     setPickedLoc({ lat, lng });
   }, []);
@@ -741,7 +746,7 @@ function CafeFinderInner() {
               <div
                 key={c.id}
                 ref={(el) => (cardRefs.current[c.id] = el)}
-                onClick={() => selectCafe(c.id)}
+                onClick={() => showCafeOnMap(c.id)}
                 style={{ ...styles.card, ...(selected === c.id ? styles.cardSelected : {}) }}
               >
                 <div style={styles.cardTop}>
@@ -1524,6 +1529,18 @@ function NaverRealMap({ cafes, selected, hovered, onSelect, onHover, pickMode, o
       console.error("마커 아이콘 갱신 실패:", e);
     }
   }, [selected, hovered]);
+
+  // 목록에서 카페를 선택하면 지도에서도 실제로 보이도록 그 위치로 이동한다.
+  useEffect(() => {
+    if (!mapObj.current || !window.naver || selected == null) return;
+    const target = cafes.find((c) => String(c.id) === String(selected));
+    if (!target) return;
+    try {
+      mapObj.current.panTo(new window.naver.maps.LatLng(target.lat, target.lng));
+    } catch (e) {
+      console.error("지도 이동 실패:", e);
+    }
+  }, [selected]);
 
   useEffect(() => {
     if (!mapObj.current || !window.naver) return;
