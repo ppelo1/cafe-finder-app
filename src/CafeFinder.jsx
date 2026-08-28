@@ -735,8 +735,7 @@ function CafeFinderInner() {
       </div>
 
       <div style={styles.mainMobile}>
-        {mobileTab === "list" && (
-          <div style={styles.listPaneMobile}>
+        <div style={{ ...styles.listPaneMobile, display: mobileTab === "list" ? "flex" : "none" }}>
             {filtered.length === 0 && (
               <div style={styles.emptyState}>
                 {query ? `'${query}'에 맞는 카페가 없어요.` : "조건에 맞는 카페가 없어요. 필터를 줄여보세요."}
@@ -775,39 +774,35 @@ function CafeFinderInner() {
                 </div>
               </div>
             ))}
-          </div>
-        )}
+        </div>
 
-          {mobileTab === "map" && (
-          <div style={styles.mapPaneMobile}>
-            {mapStatus === "ready" ? (
-              <NaverRealMap
-                cafes={mapCafes}
-                selected={selected}
-                hovered={hovered}
-                onSelect={selectCafe}
-                onHover={setHovered}
-                pickMode={showForm}
-                onPick={handleMapClickForForm}
-                pickedLoc={pickedLoc}
-                onViewportChange={handleMapViewportChange}
-              />
-            ) : (
-              <MockMapView
-                cafes={mapCafes}
-                selected={selected}
-                hovered={hovered}
-                onSelect={selectCafe}
-                onHover={setHovered}
-                pickMode={showForm}
-                onPick={handleMapClickForForm}
-                pickedLoc={pickedLoc}
-                onViewportChange={handleMapViewportChange}
-              />
-            )}
-
-          </div>
-        )}
+        <div style={{ ...styles.mapPaneMobile, display: mobileTab === "map" ? "block" : "none" }}>
+          {mapStatus === "ready" ? (
+            <NaverRealMap
+              cafes={mapCafes}
+              selected={selected}
+              hovered={hovered}
+              onSelect={selectCafe}
+              onHover={setHovered}
+              pickMode={showForm}
+              onPick={handleMapClickForForm}
+              pickedLoc={pickedLoc}
+              onViewportChange={handleMapViewportChange}
+            />
+          ) : (
+            <MockMapView
+              cafes={mapCafes}
+              selected={selected}
+              hovered={hovered}
+              onSelect={selectCafe}
+              onHover={setHovered}
+              pickMode={showForm}
+              onPick={handleMapClickForForm}
+              pickedLoc={pickedLoc}
+              onViewportChange={handleMapViewportChange}
+            />
+          )}
+        </div>
       </div>
 
       {detailCafe && (
@@ -1542,7 +1537,11 @@ function NaverRealMap({ cafes, selected, hovered, onSelect, onHover, pickMode, o
     const target = cafes.find((c) => String(c.id) === String(selected));
     if (!target) return;
     try {
-      const coord = new window.naver.maps.LatLng(target.lat, target.lng);
+      const { naver } = window;
+      // 목록 탭 전환으로 지도 컨테이너가 display:none 이었다가 다시 보이는
+      // 경우 내부 크기 계산이 안 맞을 수 있어 먼저 리사이즈를 알려준다.
+      naver.maps.Event.trigger(mapObj.current, "resize");
+      const coord = new naver.maps.LatLng(target.lat, target.lng);
       if (typeof mapObj.current.morph === "function") {
         mapObj.current.morph(coord, 17);
       } else {
