@@ -945,16 +945,24 @@ function CafeDetailModal({ cafe, onClose, onAddReview }) {
               <button type="button" style={styles.reviewModalCloseBtn} onClick={() => setShowReviewComposer(false)} aria-label="리뷰 작성 닫기">×</button>
             </div>
             <p style={styles.reviewModalCafeName}>{cafe.name} · 리뷰는 선택이에요</p>
+            {composerMode === "photo" && (
+              <>
+                <label style={styles.photoAttachBtn}>사진 첨부<input type="file" accept="image/*" multiple onChange={handleReviewImages} style={{ display: "none" }} /></label>
+                {reviewImages.length > 0 && <div style={styles.reviewImagePreviewRow}>{reviewImages.map(({ url }, index) => <img key={url} src={url} alt={`첨부 사진 ${index + 1}`} style={styles.reviewImagePreview} />)}</div>}
+              </>
+            )}
             <div style={styles.ratingPicker} aria-label="별점 선택">
               {[1, 2, 3, 4, 5].map((rating) => (
                 <button key={rating} type="button" onClick={() => setReviewRating(rating)} style={{ ...styles.starButton, ...(rating <= reviewRating ? styles.starButtonActive : {}) }} aria-label={`${rating}점`}>★</button>
               ))}
             </div>
-            <textarea autoFocus style={styles.reviewInput} value={reviewText} onChange={(event) => setReviewText(event.target.value)} placeholder={composerMode === "photo" ? "리뷰를 남겨보세요 (선택)" : "카페에서의 경험을 남겨주세요 (선택)"} />
-            {reviewImages.length > 0 && <div style={styles.reviewImagePreviewRow}>{reviewImages.map(({ url }, index) => <img key={url} src={url} alt={`첨부 사진 ${index + 1}`} style={styles.reviewImagePreview} />)}</div>}
+            <textarea autoFocus={composerMode !== "photo"} style={styles.reviewInput} value={reviewText} onChange={(event) => setReviewText(event.target.value)} placeholder={composerMode === "photo" ? "리뷰를 남겨보세요 (선택)" : "카페에서의 경험을 남겨주세요 (선택)"} />
+            {composerMode !== "photo" && reviewImages.length > 0 && <div style={styles.reviewImagePreviewRow}>{reviewImages.map(({ url }, index) => <img key={url} src={url} alt={`첨부 사진 ${index + 1}`} style={styles.reviewImagePreview} />)}</div>}
             <div style={styles.reviewComposerActions}>
-              <label style={styles.photoAttachBtn}>사진 첨부<input type="file" accept="image/*" multiple onChange={handleReviewImages} style={{ display: "none" }} /></label>
-              <button type="button" style={{ ...styles.reviewSubmitBtn, opacity: reviewText.trim() || reviewImages.length ? 1 : 0.45 }} onClick={submitReview} disabled={!reviewText.trim() && reviewImages.length === 0}>{composerMode === "photo" ? "사진 등록" : "리뷰 등록"}</button>
+              {composerMode !== "photo" && (
+                <label style={styles.photoAttachBtn}>사진 첨부<input type="file" accept="image/*" multiple onChange={handleReviewImages} style={{ display: "none" }} /></label>
+              )}
+              <button type="button" style={{ ...styles.reviewSubmitBtn, opacity: reviewText.trim() || reviewImages.length ? 1 : 0.45, marginLeft: composerMode === "photo" ? "auto" : 0 }} onClick={submitReview} disabled={!reviewText.trim() && reviewImages.length === 0}>{composerMode === "photo" ? "사진 등록" : "리뷰 등록"}</button>
             </div>
           </div>
         </div>
