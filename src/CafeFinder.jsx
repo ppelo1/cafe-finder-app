@@ -1054,6 +1054,7 @@ function CafeForm({ pickedLoc, onCancel, onSubmit, mapStatus, onSetLoc }) {
   const [placeQuery, setPlaceQuery] = useState("");
   const [placeSearching, setPlaceSearching] = useState(false);
   const [placeResults, setPlaceResults] = useState([]);
+  const [placeSearchError, setPlaceSearchError] = useState("");
   const [showAddressSearch, setShowAddressSearch] = useState(false);
   const postcodeReady = useDaumPostcodeScript();
   const postcodeContainerRef = useRef(null);
@@ -1089,6 +1090,7 @@ function CafeForm({ pickedLoc, onCancel, onSubmit, mapStatus, onSetLoc }) {
     if (!query) return;
     setPlaceSearching(true);
     setGeocodeFailed(false);
+    setPlaceSearchError("");
     try {
       const places = NAVER_SEARCH_CONFIG.clientId
         ? await fetchNaverPlaces(query)
@@ -1102,6 +1104,7 @@ function CafeForm({ pickedLoc, onCancel, onSubmit, mapStatus, onSetLoc }) {
       if (!places.length) {
         setGeocodeFailed(true);
         setPlaceResults([]);
+        setPlaceSearchError(`검색 방식: ${NAVER_SEARCH_CONFIG.clientId ? "브라우저 직접 호출" : "백엔드 프록시"} / 결과 0건 (에러 없음)`);
         return;
       }
       setPlaceResults(places);
@@ -1110,6 +1113,9 @@ function CafeForm({ pickedLoc, onCancel, onSubmit, mapStatus, onSetLoc }) {
       setPlaceSearching(false);
       setGeocodeFailed(true);
       setPlaceResults([]);
+      setPlaceSearchError(
+        `검색 방식: ${NAVER_SEARCH_CONFIG.clientId ? "브라우저 직접 호출" : "백엔드 프록시"} / 에러: ${error.message || String(error)}`
+      );
     }
   };
 
@@ -1190,6 +1196,11 @@ function CafeForm({ pickedLoc, onCancel, onSubmit, mapStatus, onSetLoc }) {
                 {placeSearching ? "검색 중..." : "검색"}
               </button>
             </div>
+            {placeSearchError && (
+              <div style={{ fontSize: 11, color: "#b3441f", marginTop: 4, wordBreak: "break-all" }}>
+                [디버그] {placeSearchError}
+              </div>
+            )}
             {placeResults.length > 0 && (
               <div style={styles.placeResults}>
                 <span style={styles.placeResultsTitle}>검색 결과</span>
