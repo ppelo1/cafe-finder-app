@@ -834,21 +834,26 @@ function CafeDetailModal({ cafe, onClose, onAddReview }) {
   const [composerMode, setComposerMode] = useState("review");
   const [detailTab, setDetailTab] = useState("photos");
   const [selectedPhotoIndex, setSelectedPhotoIndex] = useState(null);
+  const [submittingReview, setSubmittingReview] = useState(false);
+  const [reviewSubmitError, setReviewSubmitError] = useState("");
 
   const handleReviewImages = (event) => {
     const files = Array.from(event.target.files || []).slice(0, 5);
     setReviewImages(files.map((file) => ({ file, url: URL.createObjectURL(file) })));
+    setReviewSubmitError("");
   };
 
   const fileToDataUrl = (file) => new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(reader.result);
-    reader.onerror = reject;
+    reader.onerror = () => reject(new Error(`이미지를 읽지 못했습니다: ${file.name}`));
     reader.readAsDataURL(file);
   });
 
   const submitReview = async () => {
     if (!reviewText.trim() && reviewImages.length === 0) return;
+    setSubmittingReview(true);
+    setReviewSubmitError("");
     try {
       const imageUrls = await Promise.all(reviewImages.map(({ file, url }) => file ? fileToDataUrl(file) : url));
       await onAddReview(cafe.id, {
@@ -864,6 +869,9 @@ function CafeDetailModal({ cafe, onClose, onAddReview }) {
       setShowReviewComposer(false);
     } catch (error) {
       console.error("리뷰 저장 실패:", error);
+      setReviewSubmitError(error.message || String(error));
+    } finally {
+      setSubmittingReview(false);
     }
   };
 
@@ -962,11 +970,21 @@ function CafeDetailModal({ cafe, onClose, onAddReview }) {
             </div>
             <textarea autoFocus={composerMode !== "photo"} style={styles.reviewInput} value={reviewText} onChange={(event) => setReviewText(event.target.value)} placeholder={composerMode === "photo" ? "리뷰를 남겨보세요 (선택)" : "카페에서의 경험을 남겨주세요 (선택)"} />
             {composerMode !== "photo" && reviewImages.length > 0 && <div style={styles.reviewImagePreviewRow}>{reviewImages.map(({ url }, index) => <img key={url} src={url} alt={`첨부 사진 ${index + 1}`} style={styles.reviewImagePreview} />)}</div>}
+            {reviewSubmitError && (
+              <div style={{ fontSize: 12, color: "#b3441f", marginTop: 8 }}>{reviewSubmitError}</div>
+            )}
             <div style={styles.reviewComposerActions}>
               {composerMode !== "photo" && (
                 <label style={styles.photoAttachBtn}>사진 첨부<input type="file" accept="image/*" multiple onChange={handleReviewImages} style={{ display: "none" }} /></label>
               )}
-              <button type="button" style={{ ...styles.reviewSubmitBtn, opacity: reviewText.trim() || reviewImages.length ? 1 : 0.45, marginLeft: composerMode === "photo" ? "auto" : 0 }} onClick={submitReview} disabled={!reviewText.trim() && reviewImages.length === 0}>{composerMode === "photo" ? "사진 등록" : "리뷰 등록"}</button>
+              <button
+                type="button"
+                style={{ ...styles.reviewSubmitBtn, opacity: (reviewText.trim() || reviewImages.length) && !submittingReview ? 1 : 0.45, marginLeft: composerMode === "photo" ? "auto" : 0 }}
+                onClick={submitReview}
+                disabled={(!reviewText.trim() && reviewImages.length === 0) || submittingReview}
+              >
+                {submittingReview ? "저장 중..." : composerMode === "photo" ? "사진 등록" : "리뷰 등록"}
+              </button>
             </div>
           </div>
         </div>
