@@ -558,12 +558,21 @@ function CafeFinderInner() {
   }, []);
 
   // 지도 보고 목록으로 돌아왔을 때 스크롤이 맨 위로 리셋되지 않도록
-  // 마지막으로 있던 위치를 복원한다. useEffect는 브라우저가 이미
-  // "맨 위" 상태를 한 번 그린 뒤에 실행돼서 복원 전까지 잠깐 깜빡였다 -
-  // useLayoutEffect로 화면에 그려지기 전에 동기적으로 적용한다.
+  // 마지막으로 있던 위치를 복원한다. useLayoutEffect로 화면에 그려지기
+  // 전에 동기적으로 우선 적용하고, 그 즉시 적용이 무시되는 기기가 있어
+  // rAF로 한 번 더(그래도 밀리면 다음 rAF에서 한 번 더) 재적용한다.
   useLayoutEffect(() => {
     if (mobileTab !== "list" || !listScrollRef.current) return;
-    listScrollRef.current.scrollTop = savedListScrollRef.current;
+    const el = listScrollRef.current;
+    const target = savedListScrollRef.current;
+    el.scrollTop = target;
+    let raf1 = requestAnimationFrame(() => {
+      el.scrollTop = target;
+      raf1 = requestAnimationFrame(() => {
+        el.scrollTop = target;
+      });
+    });
+    return () => cancelAnimationFrame(raf1);
   }, [mobileTab]);
 
   const selectCafe = (id) => {
@@ -572,6 +581,9 @@ function CafeFinderInner() {
   };
 
   const showCafeOnMap = (id) => {
+    if (listScrollRef.current) {
+      savedListScrollRef.current = listScrollRef.current.scrollTop;
+    }
     setSelected(id);
     setMobileTab("map");
   };
