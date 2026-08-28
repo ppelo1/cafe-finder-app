@@ -13,42 +13,18 @@ const NAVER_CONFIG = {
 
 /* =========================================================================
    네이버 장소 검색(등록 화면) 연동 안내 - GitHub Pages처럼 백엔드 서버가 없는
-   환경에서는 브라우저가 네이버 검색 API를 직접 호출합니다.
-   1) https://www.ncloud.com -> Console -> AI·NAVER API -> Search 신청
-   2) 발급받은 Client ID/Secret을 빌드 시 환경변수로 주입하세요
-      (예: GitHub Actions 저장소 Secret에 VITE_NAVER_SEARCH_CLIENT_ID /
-      VITE_NAVER_SEARCH_CLIENT_SECRET 등록 후 build 스텝 env로 전달)
-   3) 이 방식은 Client Secret이 빌드된 JS 번들에 그대로 노출되므로
-      개인/테스트 용도로만 사용하세요
+   환경에서는 Cloudflare Worker(프록시)를 거쳐 네이버 검색 API를 호출합니다.
+   네이버 API 키는 브라우저에 노출되지 않고 Worker 쪽 Secret으로만 보관됩니다.
    ========================================================================= */
-const NAVER_SEARCH_CONFIG = {
-  clientId: import.meta.env.VITE_NAVER_SEARCH_CLIENT_ID || "",
-  clientSecret: import.meta.env.VITE_NAVER_SEARCH_CLIENT_SECRET || "",
-};
+const SEARCH_PROXY_URL = "https://cafe-search-proxy.ppelo.workers.dev";
 
 async function fetchNaverPlaces(query) {
-  const url = `https://naverapihub.apigw.ntruss.com/search/v1/local?query=${encodeURIComponent(query)}&display=5&sort=random`;
-  const response = await fetch(url, {
-    headers: {
-      "X-NCP-APIGW-API-KEY-ID": NAVER_SEARCH_CONFIG.clientId,
-      "X-NCP-APIGW-API-KEY": NAVER_SEARCH_CONFIG.clientSecret,
-    },
-  });
+  const response = await fetch(`${SEARCH_PROXY_URL}?query=${encodeURIComponent(query)}`);
   const data = await response.json();
   if (!response.ok) {
-    throw new Error(data.errorMessage || "네이버 장소 검색에 실패했습니다.");
+    throw new Error(data.error || "네이버 장소 검색에 실패했습니다.");
   }
-  return (data.items || []).map((item) => ({
-    name: item.title.replace(/<[^>]*>/g, ""),
-    address: item.roadAddress || item.address,
-    roadAddress: item.roadAddress,
-    jibunAddress: item.address,
-    category: item.category,
-    link: item.link,
-    phone: item.telephone,
-    lat: Number(item.mapy) / 10000000,
-    lng: Number(item.mapx) / 10000000,
-  }));
+  return data.places || [];
 }
 
 /* 목업 지도용 좌표 변환 기준 박스 (마포구 연남·합정·망원·상수 일대 근사치) */
@@ -1092,19 +1068,11 @@ function CafeForm({ pickedLoc, onCancel, onSubmit, mapStatus, onSetLoc }) {
     setGeocodeFailed(false);
     setPlaceSearchError("");
     try {
-      const places = NAVER_SEARCH_CONFIG.clientId
-        ? await fetchNaverPlaces(query)
-        : await (async () => {
-            const response = await fetch(`/api/places?query=${encodeURIComponent(query)}`);
-            const data = await response.json();
-            if (!response.ok) throw new Error(data.error || "네이버 장소 검색에 실패했습니다.");
-            return data.places || [];
-          })();
+      const places = await fetchNaverPlaces(query);
       setPlaceSearching(false);
       if (!places.length) {
         setGeocodeFailed(true);
         setPlaceResults([]);
-        setPlaceSearchError(`검색 방식: ${NAVER_SEARCH_CONFIG.clientId ? "브라우저 직접 호출" : "백엔드 프록시"} / 결과 0건 (에러 없음)`);
         return;
       }
       setPlaceResults(places);
@@ -1113,9 +1081,7 @@ function CafeForm({ pickedLoc, onCancel, onSubmit, mapStatus, onSetLoc }) {
       setPlaceSearching(false);
       setGeocodeFailed(true);
       setPlaceResults([]);
-      setPlaceSearchError(
-        `검색 방식: ${NAVER_SEARCH_CONFIG.clientId ? "브라우저 직접 호출" : "백엔드 프록시"} / 에러: ${error.message || String(error)}`
-      );
+      setPlaceSearchError(error.message || String(error));
     }
   };
 
@@ -1198,7 +1164,7 @@ function CafeForm({ pickedLoc, onCancel, onSubmit, mapStatus, onSetLoc }) {
             </div>
             {placeSearchError && (
               <div style={{ fontSize: 11, color: "#b3441f", marginTop: 4, wordBreak: "break-all" }}>
-                [디버그] {placeSearchError}
+                {placeSearchError}
               </div>
             )}
             {placeResults.length > 0 && (
