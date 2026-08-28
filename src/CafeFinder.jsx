@@ -947,7 +947,11 @@ function CafeDetailModal({ cafe, onClose, onAddReview }) {
             <p style={styles.reviewModalCafeName}>{cafe.name} · 리뷰는 선택이에요</p>
             {composerMode === "photo" && (
               <>
-                <label style={styles.photoAttachBtn}>사진 첨부<input type="file" accept="image/*" multiple onChange={handleReviewImages} style={{ display: "none" }} /></label>
+                <label style={styles.photoAttachBtnLarge}>
+                  <span style={styles.uploadPlus}>+</span>
+                  사진 첨부하기
+                  <input type="file" accept="image/*" multiple onChange={handleReviewImages} style={{ display: "none" }} />
+                </label>
                 {reviewImages.length > 0 && <div style={styles.reviewImagePreviewRow}>{reviewImages.map(({ url }, index) => <img key={url} src={url} alt={`첨부 사진 ${index + 1}`} style={styles.reviewImagePreview} />)}</div>}
               </>
             )}
@@ -1722,6 +1726,7 @@ const styles = {
   reviewImagePreview: { width: 62, height: 62, flexShrink: 0, objectFit: "cover", borderRadius: 7 },
   reviewComposerActions: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginTop: 9 },
   photoAttachBtn: { display: "inline-flex", alignItems: "center", minHeight: 38, padding: "0 12px", borderRadius: 8, border: `1px solid ${COLOR.border}`, background: COLOR.surface, color: COLOR.inkSoft, fontSize: 12, fontWeight: 600, cursor: "pointer" },
+  photoAttachBtnLarge: { display: "flex", alignItems: "center", justifyContent: "center", gap: 8, width: "100%", boxSizing: "border-box", minHeight: 72, padding: "0 18px", borderRadius: 12, border: `1.5px dashed ${COLOR.teal}`, background: COLOR.tealSoft, color: COLOR.teal, fontSize: 15, fontWeight: 700, cursor: "pointer", touchAction: "manipulation" },
   reviewSubmitBtn: { minHeight: 38, padding: "0 15px", border: "none", borderRadius: 8, background: COLOR.accent, color: "#FFFDF8", fontSize: 12, fontWeight: 600, cursor: "pointer" },
   reviewItem: { padding: "14px 2px", borderBottom: `1px solid ${COLOR.border}` },
   reviewItemTop: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 },
