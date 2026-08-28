@@ -1039,6 +1039,9 @@ function CafeDetailModal({ cafe, onClose, onAddReview }) {
           )}
         </section>
       </div>
+      {!showReviewComposer && selectedPhotoIndex === null && (
+        <button type="button" style={styles.detailFabClose} onClick={onClose} aria-label="상세 정보 닫기">×</button>
+      )}
       {showReviewComposer && (
         <div style={styles.reviewOverlay} onClick={() => setShowReviewComposer(false)}>
           <div style={styles.reviewModal} onClick={(event) => event.stopPropagation()}>
@@ -1854,6 +1857,23 @@ const styles = {
   detailTitle: { margin: "3px 0 0", fontFamily: "'Noto Serif KR', serif", fontSize: 22 },
   detailReviewCount: { margin: "4px 0 0", color: COLOR.inkSoft, fontSize: 12 },
   detailCloseBtn: { width: 40, height: 40, border: "none", borderRadius: 10, background: COLOR.bg, color: COLOR.ink, fontSize: 26, lineHeight: 1, cursor: "pointer" },
+  detailFabClose: {
+    position: "fixed",
+    right: 18,
+    bottom: "calc(18px + env(safe-area-inset-bottom, 0px))",
+    zIndex: 61,
+    width: 46,
+    height: 46,
+    border: "none",
+    borderRadius: 23,
+    background: "rgba(38,36,31,0.78)",
+    color: "#FFFDF8",
+    fontSize: 24,
+    lineHeight: 1,
+    cursor: "pointer",
+    boxShadow: "0 4px 14px rgba(38,36,31,0.3)",
+    touchAction: "manipulation",
+  },
   detailAddress: { margin: "0 0 10px", color: COLOR.inkSoft, fontSize: 13 },
   detailDescription: { margin: "8px 0 14px", color: "#514C40", fontSize: 13.5, lineHeight: 1.55 },
   detailInfoGrid: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1, marginBottom: 16, overflow: "hidden", borderRadius: 10, background: COLOR.border },
