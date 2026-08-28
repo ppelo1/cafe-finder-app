@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef, useEffect, useCallback } from "react";
+import React, { useState, useMemo, useRef, useEffect, useLayoutEffect, useCallback } from "react";
 
 /* =========================================================================
    네이버 지도 연동 안내
@@ -558,17 +558,12 @@ function CafeFinderInner() {
   }, []);
 
   // 지도 보고 목록으로 돌아왔을 때 스크롤이 맨 위로 리셋되지 않도록
-  // 마지막으로 있던 위치를 복원한다. display:none -> flex로 막 전환된
-  // 직후엔 일부 모바일 브라우저가 scrollTop 대입을 바로 반영하지 않아서
-  // 한 프레임 미뤄서 다시 한 번 적용한다.
-  useEffect(() => {
+  // 마지막으로 있던 위치를 복원한다. useEffect는 브라우저가 이미
+  // "맨 위" 상태를 한 번 그린 뒤에 실행돼서 복원 전까지 잠깐 깜빡였다 -
+  // useLayoutEffect로 화면에 그려지기 전에 동기적으로 적용한다.
+  useLayoutEffect(() => {
     if (mobileTab !== "list" || !listScrollRef.current) return;
-    const el = listScrollRef.current;
-    el.scrollTop = savedListScrollRef.current;
-    const raf = requestAnimationFrame(() => {
-      el.scrollTop = savedListScrollRef.current;
-    });
-    return () => cancelAnimationFrame(raf);
+    listScrollRef.current.scrollTop = savedListScrollRef.current;
   }, [mobileTab]);
 
   const selectCafe = (id) => {
