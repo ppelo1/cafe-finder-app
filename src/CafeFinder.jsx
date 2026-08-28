@@ -1808,7 +1808,7 @@ const styles = {
   centerUploadBtn: { display: "flex", alignItems: "center", gap: 7, minHeight: 48, marginTop: 12, padding: "0 18px", border: "none", borderRadius: 10, background: COLOR.teal, color: "#FFFDF8", fontSize: 13, fontWeight: 600, cursor: "pointer", touchAction: "manipulation" },
   uploadPlus: { fontSize: 22, fontWeight: 300, lineHeight: 1 },
   photoViewerOverlay: { position: "fixed", inset: 0, zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(10,10,10,0.94)" },
-  photoViewerImage: { maxWidth: "calc(100vw - 96px)", maxHeight: "calc(100vh - 100px)", objectFit: "contain", userSelect: "none" },
+  photoViewerImage: { maxWidth: "100vw", maxHeight: "100vh", objectFit: "contain", userSelect: "none" },
   photoViewerClose: { position: "absolute", top: 16, right: 16, zIndex: 1, width: 44, height: 44, border: "none", borderRadius: 22, background: "rgba(255,255,255,0.14)", color: "#FFFDF8", fontSize: 29, lineHeight: 1, cursor: "pointer" },
   photoViewerNav: { position: "absolute", top: "50%", zIndex: 1, width: 48, height: 64, marginTop: -32, border: "none", borderRadius: 10, background: "rgba(255,255,255,0.16)", color: "#FFFDF8", fontSize: 42, lineHeight: 1, cursor: "pointer" },
   photoViewerPrev: { left: 16 },
