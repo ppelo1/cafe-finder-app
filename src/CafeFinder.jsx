@@ -780,6 +780,7 @@ function CafeFinderInner() {
           {mapStatus === "ready" ? (
             <NaverRealMap
               cafes={mapCafes}
+              allCafes={filtered}
               selected={selected}
               hovered={hovered}
               onSelect={selectCafe}
@@ -1403,7 +1404,7 @@ function CafeForm({ pickedLoc, onCancel, onSubmit, mapStatus, onSetLoc }) {
 }
 
 /* ---------- 실제 네이버 지도 ---------- */
-function NaverRealMap({ cafes, selected, hovered, onSelect, onHover, pickMode, onPick, pickedLoc, onViewportChange }) {
+function NaverRealMap({ cafes, allCafes, selected, hovered, onSelect, onHover, pickMode, onPick, pickedLoc, onViewportChange }) {
   const mapRef = useRef(null);
   const mapObj = useRef(null);
   const markersRef = useRef({});
@@ -1534,7 +1535,7 @@ function NaverRealMap({ cafes, selected, hovered, onSelect, onHover, pickMode, o
   // 목록에서 카페를 선택하면 지도에서도 실제로 보이도록 그 위치로 확대 이동한다.
   useEffect(() => {
     if (!mapObj.current || !window.naver || selected == null) return;
-    const target = cafes.find((c) => String(c.id) === String(selected));
+    const target = (allCafes || cafes).find((c) => String(c.id) === String(selected));
     if (!target) return;
     try {
       const { naver } = window;
