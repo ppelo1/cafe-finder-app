@@ -670,16 +670,6 @@ function CafeFinderInner() {
       <div style={styles.appShell}>
       <style>{FONT_IMPORT}</style>
 
-      <header style={styles.header}>
-        <div>
-          <p style={styles.eyebrow}>공부하기 좋은 동네 카페</p>
-          <h1 style={styles.title}>카페 찾기</h1>
-        </div>
-        <button style={styles.addBtn} onClick={() => { setPickedLoc(null); setShowForm(true); }}>
-          + 카페 등록
-        </button>
-      </header>
-
       <div style={styles.mainMobile}>
         <div
           ref={listScrollRef}
@@ -755,6 +745,16 @@ function CafeFinderInner() {
         </div>
 
         <div ref={overlayRef} style={styles.overlayControls}>
+          <div style={styles.brandRow}>
+            <div style={styles.logoBadge}>
+              <span aria-hidden="true">☕</span>
+              카페찾기
+            </div>
+            <button style={styles.addBtn} onClick={() => { setPickedLoc(null); setShowForm(true); }}>
+              + 카페 등록
+            </button>
+          </div>
+
           <div style={styles.searchBar}>
             <SearchIcon size={16} color={COLOR.inkSoft} />
             <input
@@ -1864,11 +1864,10 @@ const styles = {
     flexDirection: "column",
     boxShadow: "0 0 44px rgba(38,36,31,0.14)",
   },
-  header: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "10px 16px 6px" },
-  eyebrow: { margin: 0, fontSize: 10, letterSpacing: "0.12em", color: COLOR.accent, fontWeight: 600 },
-  title: { margin: "1px 0 0", fontFamily: "'Noto Serif KR', serif", fontSize: 19, fontWeight: 700, letterSpacing: "-0.01em" },
-  addBtn: { padding: "7px 12px", borderRadius: 999, border: "none", background: COLOR.ink, color: "#FFFDF8", fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" },
-  overlayControls: { position: "absolute", top: 0, left: 0, right: 0, zIndex: 30, paddingTop: 10 },
+  addBtn: { padding: "8px 13px", borderRadius: 999, border: "none", background: COLOR.ink, color: "#FFFDF8", fontSize: 12.5, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap", boxShadow: "0 6px 16px rgba(38,36,31,0.18)" },
+  overlayControls: { position: "absolute", top: 0, left: 0, right: 0, zIndex: 30, paddingTop: "calc(10px + env(safe-area-inset-top, 0px))" },
+  brandRow: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, margin: "0 16px 10px" },
+  logoBadge: { display: "flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 999, background: COLOR.surface, boxShadow: "0 6px 16px rgba(38,36,31,0.14)", fontFamily: "'Noto Serif KR', serif", fontSize: 14, fontWeight: 700, color: COLOR.ink, letterSpacing: "-0.01em" },
   searchBar: { display: "flex", alignItems: "center", gap: 8, margin: "0 16px 10px", padding: "10px 12px", borderRadius: 12, border: `1px solid ${COLOR.border}`, background: COLOR.surface, boxShadow: "0 6px 16px rgba(38,36,31,0.14)" },
   searchInput: { flex: 1, border: "none", outline: "none", background: "transparent", fontSize: 15, color: COLOR.ink, fontFamily: "'Noto Sans KR', sans-serif" },
   searchClearBtn: { border: "none", background: "transparent", color: COLOR.inkSoft, fontSize: 13, cursor: "pointer", padding: 2 },
