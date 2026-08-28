@@ -843,11 +843,26 @@ function CafeDetailModal({ cafe, onClose, onAddReview }) {
     setReviewSubmitError("");
   };
 
-  const fileToDataUrl = (file) => new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
-    reader.onerror = () => reject(new Error(`이미지를 읽지 못했습니다: ${file.name}`));
-    reader.readAsDataURL(file);
+  // 휴대폰 카메라 원본 사진은 수 MB로 커서 FileReader.readAsDataURL이 간헐적으로
+  // 실패하고 localStorage 용량도 금방 차므로, 캔버스로 축소·압축한 뒤 저장한다.
+  const fileToCompressedDataUrl = (file, maxDimension = 1440, quality = 0.82) => new Promise((resolve, reject) => {
+    const objectUrl = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(1, maxDimension / Math.max(img.width, img.height));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, Math.round(img.width * scale));
+      canvas.height = Math.max(1, Math.round(img.height * scale));
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      URL.revokeObjectURL(objectUrl);
+      resolve(canvas.toDataURL("image/jpeg", quality));
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error(`이미지를 불러오지 못했습니다: ${file.name}`));
+    };
+    img.src = objectUrl;
   });
 
   const submitReview = async () => {
@@ -855,7 +870,14 @@ function CafeDetailModal({ cafe, onClose, onAddReview }) {
     setSubmittingReview(true);
     setReviewSubmitError("");
     try {
-      const imageUrls = await Promise.all(reviewImages.map(({ file, url }) => file ? fileToDataUrl(file) : url));
+      const results = await Promise.allSettled(
+        reviewImages.map(({ file, url }) => (file ? fileToCompressedDataUrl(file) : Promise.resolve(url)))
+      );
+      const imageUrls = results.filter((r) => r.status === "fulfilled").map((r) => r.value);
+      const failedCount = results.length - imageUrls.length;
+      if (imageUrls.length === 0 && failedCount > 0) {
+        throw new Error("사진을 처리하지 못했습니다. 다른 사진으로 시도해주세요.");
+      }
       await onAddReview(cafe.id, {
       id: Date.now(),
       rating: reviewRating,
@@ -866,7 +888,12 @@ function CafeDetailModal({ cafe, onClose, onAddReview }) {
       setReviewText("");
       setReviewRating(0);
       setReviewImages([]);
-      setShowReviewComposer(false);
+      if (failedCount > 0) {
+        // 저장은 됐지만 일부 사진이 빠졌다는 걸 보여줘야 하니 모달을 자동으로 닫지 않는다.
+        setReviewSubmitError(`저장은 됐지만 사진 ${failedCount}장은 처리에 실패해 제외했습니다.`);
+      } else {
+        setShowReviewComposer(false);
+      }
     } catch (error) {
       console.error("리뷰 저장 실패:", error);
       setReviewSubmitError(error.message || String(error));
