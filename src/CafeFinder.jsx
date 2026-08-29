@@ -266,18 +266,26 @@ function PinIcon({ size = 30, filled, color }) {
     <svg width={size} height={size} viewBox="0 0 30 38" fill="none">
       <path
         d="M15 1C7.8 1 2 6.8 2 14c0 9.6 11.3 21.6 12 22.3.5.5 1.2.5 1.8 0C16.6 35.6 28 23.6 28 14 28 6.8 22.2 1 15 1z"
-        fill={filled ? color : "#FFFDF8"}
-        stroke={color}
-        strokeWidth="2"
+        fill={color}
       />
-      <circle cx="15" cy="14" r="5.2" fill={filled ? "#FFFDF8" : color} />
+      <circle cx="15" cy="14" r="6.2" fill="#FFFDF8" stroke={filled ? color : "none"} strokeWidth="1" />
+      <g fill="none" stroke={color} strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M11 12h7v2.2a3.2 3.2 0 01-3.2 3.2h-0.6A3.2 3.2 0 0111 14.2V12z" />
+        <path d="M18 12.8h1a1.3 1.3 0 010 2.6h-1" />
+        <path d="M13 10.6c0-.6-.6-.6-.6-1.2M14.8 10.6c0-.6-.6-.6-.6-1.2" />
+      </g>
     </svg>
   );
 }
 function pinDataUrl(color, filled) {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="30" height="38" viewBox="0 0 30 38">
-    <path d="M15 1C7.8 1 2 6.8 2 14c0 9.6 11.3 21.6 12 22.3.5.5 1.2.5 1.8 0C16.6 35.6 28 23.6 28 14 28 6.8 22.2 1 15 1z" fill="${filled ? color : "#FFFDF8"}" stroke="${color}" stroke-width="2"/>
-    <circle cx="15" cy="14" r="5.2" fill="${filled ? "#FFFDF8" : color}"/>
+    <path d="M15 1C7.8 1 2 6.8 2 14c0 9.6 11.3 21.6 12 22.3.5.5 1.2.5 1.8 0C16.6 35.6 28 23.6 28 14 28 6.8 22.2 1 15 1z" fill="${color}"/>
+    <circle cx="15" cy="14" r="6.2" fill="#FFFDF8" stroke="${filled ? color : "none"}" stroke-width="1"/>
+    <g fill="none" stroke="${color}" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M11 12h7v2.2a3.2 3.2 0 01-3.2 3.2h-0.6A3.2 3.2 0 0111 14.2V12z"/>
+      <path d="M18 12.8h1a1.3 1.3 0 010 2.6h-1"/>
+      <path d="M13 10.6c0-.6-.6-.6-.6-1.2M14.8 10.6c0-.6-.6-.6-.6-1.2"/>
+    </g>
   </svg>`;
   return "data:image/svg+xml;charset=UTF-8," + encodeURIComponent(svg);
 }
@@ -771,6 +779,10 @@ function CafeFinderInner() {
                 ✕
               </button>
             )}
+            <div style={styles.logoInlineRight} aria-hidden="true">
+              <span style={styles.logoInlineRightIcon}>☕</span>
+              카페찾기
+            </div>
           </div>
 
           <div style={styles.filterBarWrap}>
@@ -865,15 +877,12 @@ function CafeFinderInner() {
           </div>
         </div>
 
-        <div style={styles.logoWatermark} aria-hidden="true">
-          <span style={styles.logoWatermarkIcon}>☕</span>
-          카페찾기
-        </div>
-
         <button style={styles.addBtnFloating} onClick={() => { setPickedLoc(null); setShowForm(true); }}>
-          <span aria-hidden="true">+</span>
-          <span aria-hidden="true">🏪</span>
-          카페 등록
+          <span style={styles.addBtnIconWrap} aria-hidden="true">
+            <span style={styles.addBtnIcon}>☕</span>
+            <span style={styles.addBtnPlusBadge}>+</span>
+          </span>
+          <span style={styles.addBtnLabel}>카페 등록</span>
         </button>
       </div>
 
@@ -1877,11 +1886,15 @@ const styles = {
     flexDirection: "column",
     boxShadow: "0 0 44px rgba(38,36,31,0.14)",
   },
-  addBtnFloating: { position: "absolute", right: 16, bottom: "calc(16px + env(safe-area-inset-bottom, 0px))", zIndex: 25, display: "flex", alignItems: "center", gap: 6, padding: "13px 20px", borderRadius: 999, border: "none", background: COLOR.ink, color: "#FFFDF8", fontSize: 14, fontWeight: 700, cursor: "pointer", boxShadow: "0 8px 20px rgba(38,36,31,0.3)" },
+  addBtnFloating: { position: "absolute", right: 16, bottom: "calc(16px + env(safe-area-inset-bottom, 0px))", zIndex: 25, width: 78, height: 78, borderRadius: 39, border: "none", background: COLOR.accent, color: "#FFFDF8", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 2, cursor: "pointer", boxShadow: "0 8px 20px rgba(181,83,60,0.45)" },
+  addBtnIconWrap: { position: "relative", display: "flex", alignItems: "center", justifyContent: "center" },
+  addBtnIcon: { fontSize: 22, lineHeight: 1 },
+  addBtnPlusBadge: { position: "absolute", top: -3, right: -9, width: 16, height: 16, borderRadius: 8, background: "#FFFDF8", color: COLOR.accent, fontSize: 11, fontWeight: 700, lineHeight: "16px", textAlign: "center" },
+  addBtnLabel: { fontSize: 10.5, fontWeight: 700 },
   overlayControls: { position: "absolute", top: 0, left: 0, right: 0, zIndex: 30, paddingTop: "calc(10px + env(safe-area-inset-top, 0px))" },
   searchBar: { display: "flex", alignItems: "center", gap: 10, margin: "0 16px 10px", padding: "10px 14px", borderRadius: 999, border: `1px solid ${COLOR.border}`, background: COLOR.surface, boxShadow: "0 6px 16px rgba(38,36,31,0.14)" },
-  logoWatermark: { position: "absolute", left: 16, bottom: "calc(16px + env(safe-area-inset-bottom, 0px))", zIndex: 20, display: "flex", alignItems: "center", gap: 6, fontFamily: "'Noto Serif KR', serif", fontSize: 13, fontWeight: 700, color: "rgba(38,36,31,0.45)", textShadow: "0 1px 2px rgba(255,255,255,0.6)", pointerEvents: "none" },
-  logoWatermarkIcon: { fontSize: 16, opacity: 0.55 },
+  logoInlineRight: { display: "flex", alignItems: "center", gap: 5, flexShrink: 0, fontFamily: "'Noto Serif KR', serif", fontSize: 13, fontWeight: 700, color: COLOR.inkSoft, whiteSpace: "nowrap", pointerEvents: "none" },
+  logoInlineRightIcon: { fontSize: 16, color: COLOR.accent },
   searchInput: { flex: 1, border: "none", outline: "none", background: "transparent", fontSize: 15, color: COLOR.ink, fontFamily: "'Noto Sans KR', sans-serif", minWidth: 0 },
   searchClearBtn: { border: "none", background: "transparent", color: COLOR.inkSoft, fontSize: 13, cursor: "pointer", padding: 2 },
   filterBarWrap: { position: "relative", margin: "0 0 12px" },
