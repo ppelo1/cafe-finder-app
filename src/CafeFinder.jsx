@@ -277,6 +277,28 @@ function PinIcon({ size = 30, filled, color }) {
     </svg>
   );
 }
+function CupSteamIcon({ size = 20, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <path d="M5 9h11v4a5.5 5.5 0 01-5.5 5.5h0A5.5 5.5 0 015 13V9z" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M16 10.5h1.6a2.3 2.3 0 010 4.6H16" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M8.5 7c0-1.3-1.6-1.3-1.6-2.6M13.5 7c0-1.3-1.6-1.3-1.6-2.6" stroke={color} strokeWidth="1.3" strokeLinecap="round" />
+    </svg>
+  );
+}
+/* 검색창 배경 이미지용 로고(커피잔+김+"카페찾기") - 별도 엘리먼트가 아니라
+   input의 background-image라서 그 위 공간에도 그대로 타이핑할 수 있다. */
+function searchLogoBackgroundUrl(color) {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="112" height="24" viewBox="0 0 112 24">
+    <g fill="none" stroke="${color}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M2 9h11v3.4A4.6 4.6 0 018.4 17h-0.8A4.6 4.6 0 013 12.4V9z"/>
+      <path d="M13 10.2h1.6a1.9 1.9 0 010 3.8H13"/>
+      <path d="M5.3 7c0-1-1.2-1-1.2-2M9 7c0-1-1.2-1-1.2-2"/>
+    </g>
+    <text x="20" y="15.5" font-family="'Noto Sans KR', 'Malgun Gothic', sans-serif" font-size="12.5" font-weight="700" fill="${color}">카페찾기</text>
+  </svg>`;
+  return "data:image/svg+xml;charset=UTF-8," + encodeURIComponent(svg);
+}
 function pinDataUrl(color, filled) {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="30" height="38" viewBox="0 0 30 38">
     <path d="M15 1C7.8 1 2 6.8 2 14c0 9.6 11.3 21.6 12 22.3.5.5 1.2.5 1.8 0C16.6 35.6 28 23.6 28 14 28 6.8 22.2 1 15 1z" fill="${color}"/>
@@ -779,10 +801,6 @@ function CafeFinderInner() {
                 ✕
               </button>
             )}
-            <div style={styles.logoInlineRight} aria-hidden="true">
-              <span style={styles.logoInlineRightIcon}>☕</span>
-              카페찾기
-            </div>
           </div>
 
           <div style={styles.filterBarWrap}>
@@ -879,7 +897,7 @@ function CafeFinderInner() {
 
         <button style={styles.addBtnFloating} onClick={() => { setPickedLoc(null); setShowForm(true); }}>
           <span style={styles.addBtnIconWrap} aria-hidden="true">
-            <span style={styles.addBtnIcon}>☕</span>
+            <CupSteamIcon size={22} color="#FFFDF8" />
             <span style={styles.addBtnPlusBadge}>+</span>
           </span>
           <span style={styles.addBtnLabel}>카페 등록</span>
@@ -1888,14 +1906,24 @@ const styles = {
   },
   addBtnFloating: { position: "absolute", right: 16, bottom: "calc(16px + env(safe-area-inset-bottom, 0px))", zIndex: 25, width: 78, height: 78, borderRadius: 39, border: "none", background: COLOR.accent, color: "#FFFDF8", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 2, cursor: "pointer", boxShadow: "0 8px 20px rgba(181,83,60,0.45)" },
   addBtnIconWrap: { position: "relative", display: "flex", alignItems: "center", justifyContent: "center" },
-  addBtnIcon: { fontSize: 22, lineHeight: 1 },
   addBtnPlusBadge: { position: "absolute", top: -3, right: -9, width: 16, height: 16, borderRadius: 8, background: "#FFFDF8", color: COLOR.accent, fontSize: 11, fontWeight: 700, lineHeight: "16px", textAlign: "center" },
   addBtnLabel: { fontSize: 10.5, fontWeight: 700 },
   overlayControls: { position: "absolute", top: 0, left: 0, right: 0, zIndex: 30, paddingTop: "calc(10px + env(safe-area-inset-top, 0px))" },
   searchBar: { display: "flex", alignItems: "center", gap: 10, margin: "0 16px 10px", padding: "10px 14px", borderRadius: 999, border: `1px solid ${COLOR.border}`, background: COLOR.surface, boxShadow: "0 6px 16px rgba(38,36,31,0.14)" },
-  logoInlineRight: { display: "flex", alignItems: "center", gap: 5, flexShrink: 0, fontFamily: "'Noto Serif KR', serif", fontSize: 13, fontWeight: 700, color: COLOR.inkSoft, whiteSpace: "nowrap", pointerEvents: "none" },
-  logoInlineRightIcon: { fontSize: 16, color: COLOR.accent },
-  searchInput: { flex: 1, border: "none", outline: "none", background: "transparent", fontSize: 15, color: COLOR.ink, fontFamily: "'Noto Sans KR', sans-serif", minWidth: 0 },
+  searchInput: {
+    flex: 1,
+    border: "none",
+    outline: "none",
+    backgroundColor: "transparent",
+    backgroundImage: `url("${searchLogoBackgroundUrl("rgba(107,99,85,0.42)")}")`,
+    backgroundRepeat: "no-repeat",
+    backgroundPosition: "right center",
+    backgroundSize: "104px 22px",
+    fontSize: 15,
+    color: COLOR.ink,
+    fontFamily: "'Noto Sans KR', sans-serif",
+    minWidth: 0,
+  },
   searchClearBtn: { border: "none", background: "transparent", color: COLOR.inkSoft, fontSize: 13, cursor: "pointer", padding: 2 },
   filterBarWrap: { position: "relative", margin: "0 0 12px" },
   filterBar: {
