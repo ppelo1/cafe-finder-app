@@ -727,6 +727,7 @@ function CafeFinderInner() {
                 key={c.id}
                 ref={(el) => (cardRefs.current[c.id] = el)}
                 onClick={() => showCafeOnMap(c.id)}
+                className="cf-card"
                 style={{ ...styles.card, ...(selected === c.id ? styles.cardSelected : {}) }}
               >
                 <div style={styles.cardTop}>
@@ -1983,7 +1984,13 @@ const STREETS = [
 ];
 
 const FONT_IMPORT = `@import url('https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@600;700&family=Noto+Sans+KR:wght@400;500;600;700&display=swap');
-.cf-filterbar::-webkit-scrollbar { display: none; }`;
+.cf-filterbar::-webkit-scrollbar { display: none; }
+button { transition: transform 0.12s ease, box-shadow 0.15s ease, background-color 0.15s ease, border-color 0.15s ease, opacity 0.15s ease; }
+button:active { transform: scale(0.96); }
+.cf-card:active { transform: scale(0.985); box-shadow: 0 1px 2px rgba(38,36,31,0.05); }
+@keyframes cf-fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes cf-modal-up { from { opacity: 0; transform: translateY(16px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
+@keyframes cf-sheet-up { from { opacity: 0; transform: translateY(28px); } to { opacity: 1; transform: translateY(0); } }`;
 
 const COLOR = {
   bg: "#EDE9DD", surface: "#FFFDF8", ink: "#26241F", inkSoft: "#6B6355",
@@ -2056,7 +2063,7 @@ const styles = {
   outletFilterOptions: { display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 7 },
   outletFilterOption: { minHeight: 40, padding: "0 7px", borderRadius: 8, border: `1px solid ${COLOR.border}`, background: COLOR.surface, color: COLOR.inkSoft, fontSize: 12, fontWeight: 600, cursor: "pointer", touchAction: "manipulation" },
   outletFilterOptionActive: { borderColor: COLOR.accent, background: COLOR.accentSoft, color: COLOR.accent },
-  filterFullMenu: { position: "absolute", top: "calc(100% + 6px)", left: 16, right: 16, zIndex: 20, padding: 14, borderRadius: 16, border: `1px solid ${COLOR.border}`, background: COLOR.surface, boxShadow: "0 10px 26px rgba(38,36,31,0.2)" },
+  filterFullMenu: { position: "absolute", top: "calc(100% + 6px)", left: 16, right: 16, zIndex: 20, padding: 14, borderRadius: 16, border: `1px solid ${COLOR.border}`, background: COLOR.surface, boxShadow: "0 10px 26px rgba(38,36,31,0.2)", animation: "cf-modal-up 0.16s ease" },
   filterFullMenuHeader: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10, color: COLOR.ink },
   filterFullMenuClose: { border: "none", background: "transparent", color: COLOR.inkSoft, fontSize: 15, cursor: "pointer", padding: 2 },
   filterFullMenuGrid: { display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 14 },
@@ -2075,13 +2082,13 @@ const styles = {
   mainMobile: { flex: 1, minHeight: 0, position: "relative" },
   listPaneMobile: { position: "absolute", inset: 0, overflowY: "auto", display: "flex", flexDirection: "column", gap: 10, padding: "0 16px 84px" },
   emptyState: { padding: "40px 20px", textAlign: "center", color: COLOR.inkSoft, fontSize: 13.5, background: COLOR.surface, borderRadius: 14, border: `1px dashed ${COLOR.border}` },
-  card: { background: COLOR.surface, border: `1px solid ${COLOR.border}`, borderRadius: 14, padding: "14px 16px", cursor: "pointer", transition: "border-color 0.15s ease" },
-  cardSelected: { borderColor: COLOR.accent, boxShadow: `0 0 0 1px ${COLOR.accent}` },
+  card: { background: COLOR.surface, border: `1px solid ${COLOR.border}`, borderRadius: 14, padding: "14px 16px", cursor: "pointer", boxShadow: "0 1px 3px rgba(38,36,31,0.05)", transition: "border-color 0.15s ease, box-shadow 0.15s ease, transform 0.12s ease" },
+  cardSelected: { borderColor: COLOR.accent, boxShadow: `0 0 0 1px ${COLOR.accent}, 0 4px 12px rgba(181,83,60,0.14)` },
   cardTop: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 },
-  cardTitle: { margin: 0, fontSize: 16, fontWeight: 700, fontFamily: "'Noto Serif KR', serif" },
+  cardTitle: { margin: 0, fontSize: 16.5, fontWeight: 700, fontFamily: "'Noto Serif KR', serif", letterSpacing: "-0.01em" },
   cardDong: { margin: "3px 0 0", fontSize: 12, color: COLOR.inkSoft },
-  rating: { fontSize: 12.5, color: COLOR.accent, fontWeight: 600, whiteSpace: "nowrap" },
-  cardDesc: { margin: "8px 0 10px", fontSize: 13, color: "#514C40", lineHeight: 1.5 },
+  rating: { fontSize: 12.5, color: COLOR.accent, fontWeight: 700, whiteSpace: "nowrap" },
+  cardDesc: { margin: "8px 0 10px", fontSize: 13, color: "#514C40", lineHeight: 1.55 },
   badgeRow: { display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 },
   badge: { display: "flex", alignItems: "center", gap: 4, fontSize: 11.5, padding: "3px 8px", borderRadius: 999, background: COLOR.tealSoft, color: COLOR.teal, fontWeight: 500 },
   cardMeta: { fontSize: 11.5, color: COLOR.inkSoft },
@@ -2089,8 +2096,8 @@ const styles = {
   closedBadge: { marginLeft: 6, padding: "1px 7px", borderRadius: 999, background: "#EDE3DD", color: "#9B7A68", fontWeight: 600, fontSize: 10.5 },
   mapPaneMobile: { position: "absolute", inset: 0, overflow: "hidden" },
   mapSvg: { width: "100%", height: "100%", display: "block" },
-  detailOverlay: { position: "fixed", inset: 0, zIndex: 60, display: "flex", alignItems: "center", justifyContent: "center", padding: 12, background: "rgba(38,36,31,0.5)" },
-  detailModal: { width: "100%", maxWidth: 560, maxHeight: "94vh", overflowY: "auto", overscrollBehaviorY: "contain", padding: 20, borderRadius: 18, background: COLOR.surface, boxShadow: "0 10px 30px rgba(38,36,31,0.22)" },
+  detailOverlay: { position: "fixed", inset: 0, zIndex: 60, display: "flex", alignItems: "center", justifyContent: "center", padding: 12, background: "rgba(38,36,31,0.5)", animation: "cf-fade-in 0.18s ease" },
+  detailModal: { width: "100%", maxWidth: 560, maxHeight: "94vh", overflowY: "auto", overscrollBehaviorY: "contain", padding: 20, borderRadius: 18, background: COLOR.surface, boxShadow: "0 10px 30px rgba(38,36,31,0.22)", animation: "cf-modal-up 0.22s ease" },
   detailHeader: { display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10 },
   detailEyebrow: { margin: 0, color: COLOR.accent, fontSize: 11.5, fontWeight: 600 },
   detailTitle: { margin: "3px 0 0", fontFamily: "'Noto Serif KR', serif", fontSize: 22 },
@@ -2126,8 +2133,8 @@ const styles = {
   reviewSectionHeader: { display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8, marginBottom: 9 },
   reviewTitle: { margin: 0, fontSize: 16, fontWeight: 700, fontFamily: "'Noto Serif KR', serif" },
   writeReviewBtn: { minHeight: 38, padding: "0 12px", border: `1px solid ${COLOR.teal}`, borderRadius: 8, background: COLOR.tealSoft, color: COLOR.teal, fontSize: 12, fontWeight: 600, cursor: "pointer", touchAction: "manipulation" },
-  reviewOverlay: { position: "fixed", inset: 0, zIndex: 80, display: "flex", alignItems: "center", justifyContent: "center", padding: 16, background: "rgba(38,36,31,0.55)" },
-  reviewModal: { width: "100%", maxWidth: 420, padding: 18, borderRadius: 16, background: COLOR.surface, boxShadow: "0 10px 30px rgba(38,36,31,0.24)" },
+  reviewOverlay: { position: "fixed", inset: 0, zIndex: 80, display: "flex", alignItems: "center", justifyContent: "center", padding: 16, background: "rgba(38,36,31,0.55)", animation: "cf-fade-in 0.15s ease" },
+  reviewModal: { width: "100%", maxWidth: 420, padding: 18, borderRadius: 16, background: COLOR.surface, boxShadow: "0 10px 30px rgba(38,36,31,0.24)", animation: "cf-modal-up 0.2s ease" },
   reviewModalHeader: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 },
   reviewModalTitle: { margin: 0, fontSize: 18, fontFamily: "'Noto Serif KR', serif" },
   reviewModalCloseBtn: { width: 38, height: 38, border: "none", borderRadius: 8, background: COLOR.bg, color: COLOR.ink, fontSize: 24, cursor: "pointer" },
@@ -2159,15 +2166,15 @@ const styles = {
   emptyPhotoText: { margin: "8px 0 0", color: COLOR.inkSoft, fontSize: 12 },
   centerUploadBtn: { display: "flex", alignItems: "center", gap: 7, minHeight: 48, marginTop: 12, padding: "0 18px", border: "none", borderRadius: 10, background: COLOR.teal, color: "#FFFDF8", fontSize: 13, fontWeight: 600, cursor: "pointer", touchAction: "manipulation" },
   uploadPlus: { fontSize: 22, fontWeight: 300, lineHeight: 1 },
-  photoViewerOverlay: { position: "fixed", inset: 0, zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(10,10,10,0.94)", overscrollBehaviorY: "contain" },
+  photoViewerOverlay: { position: "fixed", inset: 0, zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(10,10,10,0.94)", overscrollBehaviorY: "contain", animation: "cf-fade-in 0.15s ease" },
   photoViewerImage: { maxWidth: "100vw", maxHeight: "100vh", objectFit: "contain", userSelect: "none" },
   photoViewerClose: { position: "absolute", top: 16, right: 16, zIndex: 1, width: 44, height: 44, border: "none", borderRadius: 22, background: "rgba(255,255,255,0.14)", color: "#FFFDF8", fontSize: 29, lineHeight: 1, cursor: "pointer" },
   photoViewerNav: { position: "absolute", top: "50%", zIndex: 1, width: 48, height: 64, marginTop: -32, border: "none", borderRadius: 10, background: "rgba(255,255,255,0.16)", color: "#FFFDF8", fontSize: 42, lineHeight: 1, cursor: "pointer" },
   photoViewerPrev: { left: 16 },
   photoViewerNext: { right: 16 },
   photoViewerCount: { position: "absolute", bottom: 18, left: 0, right: 0, color: "#FFFDF8", fontSize: 12, textAlign: "center" },
-  modalOverlay: { position: "fixed", inset: 0, background: "rgba(38,36,31,0.5)", display: "flex", alignItems: "flex-end", justifyContent: "center", zIndex: 50 },
-  modal: { background: COLOR.surface, borderRadius: "18px 18px 0 0", padding: "22px 20px", maxWidth: 480, width: "100%", maxHeight: "88vh", overflowY: "auto" },
+  modalOverlay: { position: "fixed", inset: 0, background: "rgba(38,36,31,0.5)", display: "flex", alignItems: "flex-end", justifyContent: "center", zIndex: 50, animation: "cf-fade-in 0.18s ease" },
+  modal: { background: COLOR.surface, borderRadius: "18px 18px 0 0", padding: "22px 20px", maxWidth: 480, width: "100%", maxHeight: "88vh", overflowY: "auto", boxShadow: "0 -8px 26px rgba(38,36,31,0.18)", animation: "cf-sheet-up 0.22s ease" },
   modalTitle: { margin: "0 0 6px", fontFamily: "'Noto Serif KR', serif", fontSize: 20, fontWeight: 700 },
   modalHint: { margin: "0 0 16px", fontSize: 12.5, color: COLOR.inkSoft, background: COLOR.tealSoft, padding: "8px 12px", borderRadius: 8 },
   formGrid: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 },
@@ -2189,8 +2196,8 @@ const styles = {
   scheduleAccordionTitle: { display: "block", color: COLOR.ink, fontSize: 13 },
   scheduleAccordionSummary: { display: "block", marginTop: 3, color: COLOR.inkSoft, fontSize: 11.5, fontWeight: 400 },
   scheduleAccordionIcon: { flexShrink: 0, color: COLOR.teal, fontSize: 11.5, fontWeight: 600 },
-  postcodeOverlay: { position: "fixed", inset: 0, background: "rgba(38,36,31,0.55)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 70, padding: 16 },
-  postcodeModal: { background: COLOR.surface, borderRadius: 14, width: "100%", maxWidth: 440, overflow: "hidden", display: "flex", flexDirection: "column" },
+  postcodeOverlay: { position: "fixed", inset: 0, background: "rgba(38,36,31,0.55)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 70, padding: 16, animation: "cf-fade-in 0.15s ease" },
+  postcodeModal: { background: COLOR.surface, borderRadius: 14, width: "100%", maxWidth: 440, overflow: "hidden", display: "flex", flexDirection: "column", boxShadow: "0 10px 30px rgba(38,36,31,0.22)", animation: "cf-modal-up 0.2s ease" },
   postcodeHeader: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 14px", borderBottom: `1px solid ${COLOR.border}` },
   postcodeHeaderTitle: { fontSize: 14, fontWeight: 600, color: COLOR.ink },
   postcodeCloseBtn: { border: "none", background: "transparent", color: COLOR.inkSoft, fontSize: 13, cursor: "pointer" },
