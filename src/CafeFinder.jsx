@@ -233,6 +233,18 @@ function ParkingIcon({ size = 16, color = "currentColor" }) {
     </svg>
   );
 }
+function SlidersIcon({ size = 16, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <line x1="3" y1="6" x2="21" y2="6" stroke={color} strokeWidth="1.6" strokeLinecap="round" />
+      <line x1="3" y1="12" x2="21" y2="12" stroke={color} strokeWidth="1.6" strokeLinecap="round" />
+      <line x1="3" y1="18" x2="21" y2="18" stroke={color} strokeWidth="1.6" strokeLinecap="round" />
+      <circle cx="9" cy="6" r="2.2" fill={COLOR.surface} stroke={color} strokeWidth="1.6" />
+      <circle cx="16" cy="12" r="2.2" fill={COLOR.surface} stroke={color} strokeWidth="1.6" />
+      <circle cx="8" cy="18" r="2.2" fill={COLOR.surface} stroke={color} strokeWidth="1.6" />
+    </svg>
+  );
+}
 function ClockIcon({ size = 16, color = "currentColor" }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
@@ -845,6 +857,14 @@ function CafeFinderInner() {
               {(active.size > 0 || openNowOnly || outletRangeFilter) && (
                 <button onClick={() => { setActive(new Set()); setOpenNowOnly(false); setOutletRangeFilter(null); }} style={styles.resetBtn}>초기화</button>
               )}
+              <button
+                onClick={() => setShowOutletMenu((value) => !value)}
+                style={styles.filterSettingsChip}
+                aria-expanded={showOutletMenu}
+                aria-label="필터 설정"
+              >
+                <SlidersIcon size={16} color="#5B5648" />
+              </button>
             </div>
             {showOutletMenu && (
               <div style={styles.outletFilterMenu}>
@@ -1956,6 +1976,7 @@ const styles = {
   filterChip: { display: "flex", alignItems: "center", gap: 6, padding: "8px 13px", borderRadius: 999, border: `1px solid ${COLOR.border}`, background: COLOR.surface, color: COLOR.ink, fontSize: 13, fontWeight: 500, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0, scrollSnapAlign: "start" },
   filterChipActive: { background: COLOR.accent, borderColor: COLOR.accent, color: "#FFFDF8" },
   resetBtn: { padding: "8px 10px", borderRadius: 999, border: "none", background: "transparent", color: COLOR.inkSoft, fontSize: 12, textDecoration: "underline", cursor: "pointer", flexShrink: 0 },
+  filterSettingsChip: { display: "flex", alignItems: "center", justifyContent: "center", width: 38, height: 38, borderRadius: 999, border: `1px solid ${COLOR.border}`, background: COLOR.surface, cursor: "pointer", flexShrink: 0, scrollSnapAlign: "start" },
   mapNotice: { display: "flex", alignItems: "center", gap: 8, margin: "0 16px 10px", padding: "10px 14px", background: COLOR.surface, color: COLOR.inkSoft, fontSize: 12, borderRadius: 999, boxShadow: "0 6px 16px rgba(38,36,31,0.14)" },
   mapNoticeIcon: { flexShrink: 0, fontSize: 14 },
   mapNoticeText: { flex: 1, lineHeight: 1.4 },
