@@ -1060,6 +1060,14 @@ function CafeDetailModal({ cafe, onClose, onAddReview }) {
       if (!photoDragRef.current.mode && (Math.abs(dx) > 10 || Math.abs(dy) > 10)) {
         photoDragRef.current.mode = Math.abs(dx) > Math.abs(dy) ? "horizontal" : "vertical";
       }
+      // 화면 위쪽에서 시작한 드래그는 브라우저가 당겨서 새로고침을 훨씬
+      // 빨리(=10px 잠금 임계값 넘기 전에) 감지해버려서, 모드가 "vertical"로
+      // 확정되길 기다렸다가 막으면 이미 늦는다. 아직 방향이 안 정해졌어도
+      // 아래로 움직이는 중이면(가로보다 세로가 크거나 같으면) 곧바로 막는다.
+      if (!photoDragRef.current.mode && dy > 0 && dy >= Math.abs(dx)) {
+        event.preventDefault();
+        return;
+      }
       if (photoDragRef.current.mode === "horizontal") {
         swipedRef.current = true;
       } else if (photoDragRef.current.mode === "vertical") {
