@@ -276,6 +276,7 @@ function SearchIcon({ size = 16, color = "currentColor" }) {
 function PinIcon({ size = 30, filled, color }) {
   return (
     <svg width={size} height={size} viewBox="0 0 30 38" fill="none">
+      <ellipse cx="15" cy="36.3" rx="5.5" ry="1.5" fill="rgba(38,36,31,0.18)" />
       <path
         d="M15 1C7.8 1 2 6.8 2 14c0 9.6 11.3 21.6 12 22.3.5.5 1.2.5 1.8 0C16.6 35.6 28 23.6 28 14 28 6.8 22.2 1 15 1z"
         fill={color}
@@ -313,6 +314,7 @@ function searchLogoBackgroundUrl(color) {
 }
 function pinDataUrl(color, filled) {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="30" height="38" viewBox="0 0 30 38">
+    <ellipse cx="15" cy="36.3" rx="5.5" ry="1.5" fill="rgba(38,36,31,0.18)"/>
     <path d="M15 1C7.8 1 2 6.8 2 14c0 9.6 11.3 21.6 12 22.3.5.5 1.2.5 1.8 0C16.6 35.6 28 23.6 28 14 28 6.8 22.2 1 15 1z" fill="${color}"/>
     <circle cx="15" cy="14" r="6.2" fill="#FFFDF8" stroke="${filled ? color : "none"}" stroke-width="1"/>
     <g fill="none" stroke="${color}" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round">
