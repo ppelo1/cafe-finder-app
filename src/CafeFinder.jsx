@@ -747,11 +747,6 @@ function CafeFinderInner() {
 
         <div ref={overlayRef} style={styles.overlayControls}>
           <div style={styles.searchBar}>
-            <div style={styles.logoInline}>
-              <span aria-hidden="true">☕</span>
-              카페찾기
-            </div>
-            <div style={styles.searchDivider} />
             <SearchIcon size={16} color={COLOR.inkSoft} />
             <input
               style={styles.searchInput}
@@ -868,6 +863,11 @@ function CafeFinderInner() {
               목록 ({filtered.length})
             </button>
           </div>
+        </div>
+
+        <div style={styles.logoWatermark} aria-hidden="true">
+          <span style={styles.logoWatermarkIcon}>☕</span>
+          카페찾기
         </div>
 
         <button style={styles.addBtnFloating} onClick={() => { setPickedLoc(null); setShowForm(true); }}>
@@ -1880,8 +1880,8 @@ const styles = {
   addBtnFloating: { position: "absolute", right: 16, bottom: "calc(16px + env(safe-area-inset-bottom, 0px))", zIndex: 25, display: "flex", alignItems: "center", gap: 6, padding: "13px 20px", borderRadius: 999, border: "none", background: COLOR.ink, color: "#FFFDF8", fontSize: 14, fontWeight: 700, cursor: "pointer", boxShadow: "0 8px 20px rgba(38,36,31,0.3)" },
   overlayControls: { position: "absolute", top: 0, left: 0, right: 0, zIndex: 30, paddingTop: "calc(10px + env(safe-area-inset-top, 0px))" },
   searchBar: { display: "flex", alignItems: "center", gap: 10, margin: "0 16px 10px", padding: "10px 14px", borderRadius: 999, border: `1px solid ${COLOR.border}`, background: COLOR.surface, boxShadow: "0 6px 16px rgba(38,36,31,0.14)" },
-  logoInline: { display: "flex", alignItems: "center", gap: 6, fontFamily: "'Noto Serif KR', serif", fontSize: 14, fontWeight: 700, color: COLOR.ink, letterSpacing: "-0.01em", whiteSpace: "nowrap" },
-  searchDivider: { width: 1, alignSelf: "stretch", background: COLOR.border, flexShrink: 0 },
+  logoWatermark: { position: "absolute", left: 16, bottom: "calc(16px + env(safe-area-inset-bottom, 0px))", zIndex: 20, display: "flex", alignItems: "center", gap: 6, fontFamily: "'Noto Serif KR', serif", fontSize: 13, fontWeight: 700, color: "rgba(38,36,31,0.45)", textShadow: "0 1px 2px rgba(255,255,255,0.6)", pointerEvents: "none" },
+  logoWatermarkIcon: { fontSize: 16, opacity: 0.55 },
   searchInput: { flex: 1, border: "none", outline: "none", background: "transparent", fontSize: 15, color: COLOR.ink, fontFamily: "'Noto Sans KR', sans-serif", minWidth: 0 },
   searchClearBtn: { border: "none", background: "transparent", color: COLOR.inkSoft, fontSize: 13, cursor: "pointer", padding: 2 },
   filterBarWrap: { position: "relative", margin: "0 0 12px" },
