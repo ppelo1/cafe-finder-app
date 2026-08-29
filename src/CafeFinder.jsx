@@ -276,13 +276,14 @@ function SearchIcon({ size = 16, color = "currentColor" }) {
 function PinIcon({ size = 30, filled, color }) {
   return (
     <svg width={size} height={size} viewBox="0 0 30 38" fill="none">
-      <ellipse cx="15" cy="36.3" rx="5.5" ry="1.5" fill="rgba(38,36,31,0.18)" />
+      <ellipse cx="15" cy="36.5" rx="6.5" ry="2" fill="rgba(38,36,31,0.22)" />
       <path
         d="M15 1C7.8 1 2 6.8 2 14c0 9.6 11.3 21.6 12 22.3.5.5 1.2.5 1.8 0C16.6 35.6 28 23.6 28 14 28 6.8 22.2 1 15 1z"
         fill={color}
       />
       <circle cx="15" cy="14" r="6.2" fill="#FFFDF8" stroke={filled ? color : "none"} strokeWidth="1" />
       <g fill="none" stroke={color} strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
+        <ellipse cx="14.5" cy="17.6" rx="4.3" ry="0.75" />
         <path d="M11 12h7v2.2a3.2 3.2 0 01-3.2 3.2h-0.6A3.2 3.2 0 0111 14.2V12z" />
         <path d="M18 12.8h1a1.3 1.3 0 010 2.6h-1" />
         <path d="M13 10.6c0-.6-.6-.6-.6-1.2M14.8 10.6c0-.6-.6-.6-.6-1.2" />
@@ -293,6 +294,7 @@ function PinIcon({ size = 30, filled, color }) {
 function CupSteamIcon({ size = 20, color = "currentColor" }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <ellipse cx="10.5" cy="19.2" rx="7.5" ry="1.3" stroke={color} strokeWidth="1.5" />
       <path d="M5 9h11v4a5.5 5.5 0 01-5.5 5.5h0A5.5 5.5 0 015 13V9z" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
       <path d="M16 10.5h1.6a2.3 2.3 0 010 4.6H16" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
       <path d="M8.5 7c0-1.3-1.6-1.3-1.6-2.6M13.5 7c0-1.3-1.6-1.3-1.6-2.6" stroke={color} strokeWidth="1.3" strokeLinecap="round" />
@@ -304,6 +306,7 @@ function CupSteamIcon({ size = 20, color = "currentColor" }) {
 function searchLogoBackgroundUrl(color) {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="112" height="24" viewBox="0 0 112 24">
     <g fill="none" stroke="${color}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <ellipse cx="7.5" cy="17.6" rx="6.2" ry="1.05"/>
       <path d="M2 9h11v3.4A4.6 4.6 0 018.4 17h-0.8A4.6 4.6 0 013 12.4V9z"/>
       <path d="M13 10.2h1.6a1.9 1.9 0 010 3.8H13"/>
       <path d="M5.3 7c0-1-1.2-1-1.2-2M9 7c0-1-1.2-1-1.2-2"/>
@@ -314,10 +317,11 @@ function searchLogoBackgroundUrl(color) {
 }
 function pinDataUrl(color, filled) {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="30" height="38" viewBox="0 0 30 38">
-    <ellipse cx="15" cy="36.3" rx="5.5" ry="1.5" fill="rgba(38,36,31,0.18)"/>
+    <ellipse cx="15" cy="36.5" rx="6.5" ry="2" fill="rgba(38,36,31,0.22)"/>
     <path d="M15 1C7.8 1 2 6.8 2 14c0 9.6 11.3 21.6 12 22.3.5.5 1.2.5 1.8 0C16.6 35.6 28 23.6 28 14 28 6.8 22.2 1 15 1z" fill="${color}"/>
     <circle cx="15" cy="14" r="6.2" fill="#FFFDF8" stroke="${filled ? color : "none"}" stroke-width="1"/>
     <g fill="none" stroke="${color}" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round">
+      <ellipse cx="14.5" cy="17.6" rx="4.3" ry="0.75"/>
       <path d="M11 12h7v2.2a3.2 3.2 0 01-3.2 3.2h-0.6A3.2 3.2 0 0111 14.2V12z"/>
       <path d="M18 12.8h1a1.3 1.3 0 010 2.6h-1"/>
       <path d="M13 10.6c0-.6-.6-.6-.6-1.2M14.8 10.6c0-.6-.6-.6-.6-1.2"/>
@@ -542,6 +546,8 @@ function CafeFinderInner() {
   const toggleOutletRangeFilter = (range) => {
     setOutletRangeFilter((current) => current === range ? null : range);
   };
+
+  const hiddenFiltersActive = active.has("cute") || active.has("parking") || !!outletRangeFilter;
 
   const handleFilterMouseDown = (event) => {
     if (event.button !== 0 || !filterBarRef.current) return;
@@ -804,7 +810,7 @@ function CafeFinderInner() {
                   setQuery(queryInput.trim());
                 }
               }}
-              placeholder="카페 이름, 동네로 검색 후 Enter"
+              placeholder="카페 이름, 동네로 검색"
             />
             {queryInput && (
               <button
@@ -835,7 +841,7 @@ function CafeFinderInner() {
                 <ClockIcon size={15} color={openNowOnly ? "#FFFDF8" : "#5B5648"} />
                 지금 영업중
               </button>
-              {FILTERS.filter(({ key }) => key !== "outlet").map(({ key, label, icon: Icon }) => {
+              {FILTERS.filter(({ key }) => key === "large" || key === "interior").map(({ key, label, icon: Icon }) => {
                 const isActive = active.has(key);
                 return (
                   <button
@@ -850,22 +856,11 @@ function CafeFinderInner() {
               })}
               <button
                 onClick={() => setShowFilterPanel((value) => !value)}
-                style={{ ...styles.filterChip, ...(outletRangeFilter ? styles.filterChipActive : {}) }}
-                aria-expanded={showFilterPanel}
-              >
-                <OutletIcon size={15} color={outletRangeFilter ? "#FFFDF8" : "#5B5648"} />
-                {outletRangeFilter === "any" ? "콘센트 있음" : outletRangeFilter ? `콘센트 ${OUTLET_RANGES.find(({ value }) => value === outletRangeFilter)?.label}` : "콘센트"}
-              </button>
-              {(active.size > 0 || openNowOnly || outletRangeFilter) && (
-                <button onClick={() => { setActive(new Set()); setOpenNowOnly(false); setOutletRangeFilter(null); }} style={styles.resetBtn}>초기화</button>
-              )}
-              <button
-                onClick={() => setShowFilterPanel((value) => !value)}
-                style={styles.filterSettingsChip}
+                style={{ ...styles.filterSettingsChip, ...(hiddenFiltersActive ? styles.filterChipActive : {}) }}
                 aria-expanded={showFilterPanel}
                 aria-label="필터 설정"
               >
-                <SlidersIcon size={16} color="#5B5648" />
+                <SlidersIcon size={16} color={hiddenFiltersActive ? "#FFFDF8" : "#5B5648"} />
               </button>
             </div>
             {showFilterPanel && (
@@ -1997,6 +1992,7 @@ button:active { transform: scale(0.96); }
 const COLOR = {
   bg: "#EDE9DD", surface: "#FFFDF8", ink: "#26241F", inkSoft: "#6B6355",
   accent: "#B5533C", accentSoft: "#EFDCD3", teal: "#3D6B5F", tealSoft: "#DCE8E2", border: "#DED7C6",
+  borderSoft: "rgba(38,36,31,0.07)",
 };
 
 const styles = {
@@ -2022,7 +2018,7 @@ const styles = {
   addBtnPlusBadge: { position: "absolute", top: -3, right: -9, width: 16, height: 16, borderRadius: 8, background: "#FFFDF8", color: COLOR.accent, fontSize: 11, fontWeight: 700, lineHeight: "16px", textAlign: "center" },
   addBtnLabel: { fontSize: 10.5, fontWeight: 700 },
   overlayControls: { position: "absolute", top: 0, left: 0, right: 0, zIndex: 30, paddingTop: "calc(10px + env(safe-area-inset-top, 0px))" },
-  searchBar: { display: "flex", alignItems: "center", gap: 10, margin: "0 16px 10px", padding: "10px 14px", borderRadius: 999, border: `1px solid ${COLOR.border}`, background: COLOR.surface, boxShadow: "0 6px 16px rgba(38,36,31,0.14)" },
+  searchBar: { display: "flex", alignItems: "center", gap: 10, margin: "0 16px 10px", padding: "10px 14px", borderRadius: 999, border: `1px solid ${COLOR.borderSoft}`, background: COLOR.surface, boxShadow: "0 6px 16px rgba(38,36,31,0.14)" },
   searchInput: {
     flex: 1,
     border: "none",
@@ -2070,16 +2066,16 @@ const styles = {
   filterFullMenuClose: { border: "none", background: "transparent", color: COLOR.inkSoft, fontSize: 15, cursor: "pointer", padding: 2 },
   filterFullMenuGrid: { display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 14 },
   filterFullMenuReset: { marginTop: 12, width: "100%", padding: "10px 0", borderRadius: 10, border: "none", background: "transparent", color: COLOR.inkSoft, fontSize: 12.5, textDecoration: "underline", cursor: "pointer" },
-  filterChip: { display: "flex", alignItems: "center", gap: 6, padding: "8px 13px", borderRadius: 999, border: `1px solid ${COLOR.border}`, background: COLOR.surface, color: COLOR.ink, fontSize: 13, fontWeight: 500, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0, scrollSnapAlign: "start" },
+  filterChip: { display: "flex", alignItems: "center", gap: 6, padding: "9px 15px", borderRadius: 999, border: `1px solid ${COLOR.borderSoft}`, background: COLOR.surface, color: COLOR.ink, fontSize: 13, fontWeight: 500, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0, scrollSnapAlign: "start", boxShadow: "0 3px 8px rgba(38,36,31,0.07)" },
   filterChipActive: { background: COLOR.accent, borderColor: COLOR.accent, color: "#FFFDF8" },
   resetBtn: { padding: "8px 10px", borderRadius: 999, border: "none", background: "transparent", color: COLOR.inkSoft, fontSize: 12, textDecoration: "underline", cursor: "pointer", flexShrink: 0 },
-  filterSettingsChip: { display: "flex", alignItems: "center", justifyContent: "center", width: 38, height: 38, borderRadius: 999, border: `1px solid ${COLOR.border}`, background: COLOR.surface, cursor: "pointer", flexShrink: 0, scrollSnapAlign: "start" },
+  filterSettingsChip: { display: "flex", alignItems: "center", justifyContent: "center", width: 40, height: 40, borderRadius: 999, border: `1px solid ${COLOR.borderSoft}`, background: COLOR.surface, cursor: "pointer", flexShrink: 0, scrollSnapAlign: "start", boxShadow: "0 3px 8px rgba(38,36,31,0.07)" },
   mapNotice: { display: "flex", alignItems: "center", gap: 8, margin: "0 16px 10px", padding: "10px 14px", background: COLOR.surface, color: COLOR.inkSoft, fontSize: 12, borderRadius: 999, boxShadow: "0 6px 16px rgba(38,36,31,0.14)" },
   mapNoticeIcon: { flexShrink: 0, fontSize: 14 },
   mapNoticeText: { flex: 1, lineHeight: 1.4 },
   mapNoticeClose: { flexShrink: 0, border: "none", background: "transparent", color: COLOR.inkSoft, fontSize: 13, cursor: "pointer", padding: 2 },
   mobileTabBar: { display: "flex", gap: 8, padding: "0 16px 10px" },
-  mobileTabBtn: { flex: 1, padding: "10px 0", borderRadius: 10, border: `1px solid ${COLOR.border}`, background: COLOR.surface, color: COLOR.ink, fontSize: 14, fontWeight: 600, cursor: "pointer" },
+  mobileTabBtn: { flex: 1, padding: "10px 0", borderRadius: 10, border: `1px solid ${COLOR.borderSoft}`, background: COLOR.surface, color: COLOR.ink, fontSize: 14, fontWeight: 600, cursor: "pointer", boxShadow: "0 3px 8px rgba(38,36,31,0.07)" },
   mobileTabBtnActive: { background: COLOR.ink, borderColor: COLOR.ink, color: "#FFFDF8" },
   mainMobile: { flex: 1, minHeight: 0, position: "relative" },
   listPaneMobile: { position: "absolute", inset: 0, overflowY: "auto", display: "flex", flexDirection: "column", gap: 10, padding: "0 16px 84px" },
