@@ -463,6 +463,7 @@ function CafeFinderInner() {
   const [openNowOnly, setOpenNowOnly] = useState(false);
   const [outletRangeFilter, setOutletRangeFilter] = useState(null);
   const [showOutletMenu, setShowOutletMenu] = useState(false);
+  const [mapNoticeDismissed, setMapNoticeDismissed] = useState(false);
   const [mapViewport, setMapViewport] = useState(null);
 
   const mapStatus = useNaverMapsScript(NAVER_CONFIG.clientId);
@@ -746,6 +747,11 @@ function CafeFinderInner() {
 
         <div ref={overlayRef} style={styles.overlayControls}>
           <div style={styles.searchBar}>
+            <div style={styles.logoInline}>
+              <span aria-hidden="true">☕</span>
+              카페찾기
+            </div>
+            <div style={styles.searchDivider} />
             <SearchIcon size={16} color={COLOR.inkSoft} />
             <input
               style={styles.searchInput}
@@ -770,16 +776,6 @@ function CafeFinderInner() {
                 ✕
               </button>
             )}
-          </div>
-
-          <div style={styles.brandRow}>
-            <div style={styles.logoBadge}>
-              <span aria-hidden="true">☕</span>
-              카페찾기
-            </div>
-            <button style={styles.addBtn} onClick={() => { setPickedLoc(null); setShowForm(true); }}>
-              + 카페 등록
-            </button>
           </div>
 
           <div style={styles.filterBarWrap}>
@@ -839,11 +835,22 @@ function CafeFinderInner() {
             <div style={styles.filterBarFade} />
           </div>
 
-          {mapStatus !== "ready" && (
+          {mapStatus !== "ready" && !mapNoticeDismissed && (
             <div style={styles.mapNotice}>
-              {NAVER_CONFIG.clientId
-                ? "네이버 지도를 불러오는 중이거나 연결에 실패했어요. 지금은 목업 지도로 표시됩니다."
-                : "네이버 지도 Client ID가 설정되지 않아 목업 지도로 표시 중이에요. 코드 상단 NAVER_CONFIG.clientId를 채우면 실제 지도로 전환돼요."}
+              <span aria-hidden="true" style={styles.mapNoticeIcon}>ⓘ</span>
+              <span style={styles.mapNoticeText}>
+                {NAVER_CONFIG.clientId
+                  ? "네이버 지도를 불러오는 중이거나 연결에 실패했어요."
+                  : "네이버 지도 Client ID가 설정되지 않아 목업 지도로 표시 중이에요."}
+              </span>
+              <button
+                type="button"
+                style={styles.mapNoticeClose}
+                onClick={() => setMapNoticeDismissed(true)}
+                aria-label="안내 닫기"
+              >
+                ✕
+              </button>
             </div>
           )}
 
@@ -862,6 +869,12 @@ function CafeFinderInner() {
             </button>
           </div>
         </div>
+
+        <button style={styles.addBtnFloating} onClick={() => { setPickedLoc(null); setShowForm(true); }}>
+          <span aria-hidden="true">+</span>
+          <span aria-hidden="true">🏪</span>
+          카페 등록
+        </button>
       </div>
 
       {detailCafe && (
@@ -1864,12 +1877,12 @@ const styles = {
     flexDirection: "column",
     boxShadow: "0 0 44px rgba(38,36,31,0.14)",
   },
-  addBtn: { padding: "8px 13px", borderRadius: 999, border: "none", background: COLOR.ink, color: "#FFFDF8", fontSize: 12.5, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap", boxShadow: "0 6px 16px rgba(38,36,31,0.18)" },
+  addBtnFloating: { position: "absolute", right: 16, bottom: "calc(16px + env(safe-area-inset-bottom, 0px))", zIndex: 25, display: "flex", alignItems: "center", gap: 6, padding: "13px 20px", borderRadius: 999, border: "none", background: COLOR.ink, color: "#FFFDF8", fontSize: 14, fontWeight: 700, cursor: "pointer", boxShadow: "0 8px 20px rgba(38,36,31,0.3)" },
   overlayControls: { position: "absolute", top: 0, left: 0, right: 0, zIndex: 30, paddingTop: "calc(10px + env(safe-area-inset-top, 0px))" },
-  brandRow: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, margin: "0 16px 10px" },
-  logoBadge: { display: "flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 999, background: COLOR.surface, boxShadow: "0 6px 16px rgba(38,36,31,0.14)", fontFamily: "'Noto Serif KR', serif", fontSize: 14, fontWeight: 700, color: COLOR.ink, letterSpacing: "-0.01em" },
-  searchBar: { display: "flex", alignItems: "center", gap: 8, margin: "0 16px 10px", padding: "10px 12px", borderRadius: 12, border: `1px solid ${COLOR.border}`, background: COLOR.surface, boxShadow: "0 6px 16px rgba(38,36,31,0.14)" },
-  searchInput: { flex: 1, border: "none", outline: "none", background: "transparent", fontSize: 15, color: COLOR.ink, fontFamily: "'Noto Sans KR', sans-serif" },
+  searchBar: { display: "flex", alignItems: "center", gap: 10, margin: "0 16px 10px", padding: "10px 14px", borderRadius: 999, border: `1px solid ${COLOR.border}`, background: COLOR.surface, boxShadow: "0 6px 16px rgba(38,36,31,0.14)" },
+  logoInline: { display: "flex", alignItems: "center", gap: 6, fontFamily: "'Noto Serif KR', serif", fontSize: 14, fontWeight: 700, color: COLOR.ink, letterSpacing: "-0.01em", whiteSpace: "nowrap" },
+  searchDivider: { width: 1, alignSelf: "stretch", background: COLOR.border, flexShrink: 0 },
+  searchInput: { flex: 1, border: "none", outline: "none", background: "transparent", fontSize: 15, color: COLOR.ink, fontFamily: "'Noto Sans KR', sans-serif", minWidth: 0 },
   searchClearBtn: { border: "none", background: "transparent", color: COLOR.inkSoft, fontSize: 13, cursor: "pointer", padding: 2 },
   filterBarWrap: { position: "relative", margin: "0 0 12px" },
   filterBar: {
@@ -1902,12 +1915,15 @@ const styles = {
   filterChip: { display: "flex", alignItems: "center", gap: 6, padding: "8px 13px", borderRadius: 999, border: `1px solid ${COLOR.border}`, background: COLOR.surface, color: COLOR.ink, fontSize: 13, fontWeight: 500, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0, scrollSnapAlign: "start" },
   filterChipActive: { background: COLOR.accent, borderColor: COLOR.accent, color: "#FFFDF8" },
   resetBtn: { padding: "8px 10px", borderRadius: 999, border: "none", background: "transparent", color: COLOR.inkSoft, fontSize: 12, textDecoration: "underline", cursor: "pointer", flexShrink: 0 },
-  mapNotice: { margin: "0 16px 10px", padding: "9px 12px", background: COLOR.accentSoft, color: "#7A3B29", fontSize: 12, borderRadius: 10 },
+  mapNotice: { display: "flex", alignItems: "center", gap: 8, margin: "0 16px 10px", padding: "10px 14px", background: COLOR.surface, color: COLOR.inkSoft, fontSize: 12, borderRadius: 999, boxShadow: "0 6px 16px rgba(38,36,31,0.14)" },
+  mapNoticeIcon: { flexShrink: 0, fontSize: 14 },
+  mapNoticeText: { flex: 1, lineHeight: 1.4 },
+  mapNoticeClose: { flexShrink: 0, border: "none", background: "transparent", color: COLOR.inkSoft, fontSize: 13, cursor: "pointer", padding: 2 },
   mobileTabBar: { display: "flex", gap: 8, padding: "0 16px 10px" },
   mobileTabBtn: { flex: 1, padding: "10px 0", borderRadius: 10, border: `1px solid ${COLOR.border}`, background: COLOR.surface, color: COLOR.ink, fontSize: 14, fontWeight: 600, cursor: "pointer" },
   mobileTabBtnActive: { background: COLOR.ink, borderColor: COLOR.ink, color: "#FFFDF8" },
   mainMobile: { flex: 1, minHeight: 0, position: "relative" },
-  listPaneMobile: { position: "absolute", inset: 0, overflowY: "auto", display: "flex", flexDirection: "column", gap: 10, padding: "0 16px 24px" },
+  listPaneMobile: { position: "absolute", inset: 0, overflowY: "auto", display: "flex", flexDirection: "column", gap: 10, padding: "0 16px 84px" },
   emptyState: { padding: "40px 20px", textAlign: "center", color: COLOR.inkSoft, fontSize: 13.5, background: COLOR.surface, borderRadius: 14, border: `1px dashed ${COLOR.border}` },
   card: { background: COLOR.surface, border: `1px solid ${COLOR.border}`, borderRadius: 14, padding: "14px 16px", cursor: "pointer", transition: "border-color 0.15s ease" },
   cardSelected: { borderColor: COLOR.accent, boxShadow: `0 0 0 1px ${COLOR.accent}` },
