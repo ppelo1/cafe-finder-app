@@ -1783,7 +1783,7 @@ function NaverRealMap({ cafes, allCafes, selected, hovered, onSelect, onHover, p
           icon: {
             url: pinDataUrl(idIsSelected ? COLOR.teal : "#B5533C", idIsSelected || idIsHovered),
             size: new naver.maps.Size(30, 38),
-            scaledSize: new naver.maps.Size(idIsSelected ? 38 : 28, idIsSelected ? 48 : 36),
+            scaledSize: new naver.maps.Size(idIsSelected ? 44 : 32, idIsSelected ? 56 : 41),
             anchor: new naver.maps.Point(14, 34),
           },
         });
@@ -1827,7 +1827,7 @@ function NaverRealMap({ cafes, allCafes, selected, hovered, onSelect, onHover, p
         marker.setIcon({
           url: pinDataUrl(color, isSelected || isHovered),
           size: new naver.maps.Size(30, 38),
-          scaledSize: new naver.maps.Size(isSelected ? 38 : 28, isSelected ? 48 : 36),
+          scaledSize: new naver.maps.Size(isSelected ? 44 : 32, isSelected ? 56 : 41),
           anchor: new naver.maps.Point(14, 34),
         });
       });
@@ -1946,7 +1946,7 @@ function MockMapView({ cafes, selected, hovered, onSelect, onHover, pickMode, on
             onMouseLeave={() => onHover(null)}
             style={{ cursor: "pointer" }}
           >
-            <g transform={`translate(-2.6 -6.8) scale(${scale * 0.175})`}>
+            <g transform={`translate(-3 -7.26) scale(${scale * 0.2})`}>
               <PinIcon filled={isSelected || isHovered} color={isSelected ? "#3D6B5F" : "#B5533C"} />
             </g>
             {(isSelected || isHovered) && (
