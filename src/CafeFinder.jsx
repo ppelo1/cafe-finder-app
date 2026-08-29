@@ -504,7 +504,7 @@ function CafeFinderInner() {
   const [query, setQuery] = useState("");
   const [openNowOnly, setOpenNowOnly] = useState(false);
   const [outletRangeFilter, setOutletRangeFilter] = useState(null);
-  const [showOutletMenu, setShowOutletMenu] = useState(false);
+  const [showFilterPanel, setShowFilterPanel] = useState(false);
   const [mapNoticeDismissed, setMapNoticeDismissed] = useState(false);
   const [mapViewport, setMapViewport] = useState(null);
 
@@ -539,7 +539,6 @@ function CafeFinderInner() {
 
   const toggleOutletRangeFilter = (range) => {
     setOutletRangeFilter((current) => current === range ? null : range);
-    setShowOutletMenu(false);
   };
 
   const handleFilterMouseDown = (event) => {
@@ -847,9 +846,9 @@ function CafeFinderInner() {
                 );
               })}
               <button
-                onClick={() => setShowOutletMenu((value) => !value)}
+                onClick={() => setShowFilterPanel((value) => !value)}
                 style={{ ...styles.filterChip, ...(outletRangeFilter ? styles.filterChipActive : {}) }}
-                aria-expanded={showOutletMenu}
+                aria-expanded={showFilterPanel}
               >
                 <OutletIcon size={15} color={outletRangeFilter ? "#FFFDF8" : "#5B5648"} />
                 {outletRangeFilter === "any" ? "콘센트 있음" : outletRangeFilter ? `콘센트 ${OUTLET_RANGES.find(({ value }) => value === outletRangeFilter)?.label}` : "콘센트"}
@@ -858,16 +857,42 @@ function CafeFinderInner() {
                 <button onClick={() => { setActive(new Set()); setOpenNowOnly(false); setOutletRangeFilter(null); }} style={styles.resetBtn}>초기화</button>
               )}
               <button
-                onClick={() => setShowOutletMenu((value) => !value)}
+                onClick={() => setShowFilterPanel((value) => !value)}
                 style={styles.filterSettingsChip}
-                aria-expanded={showOutletMenu}
+                aria-expanded={showFilterPanel}
                 aria-label="필터 설정"
               >
                 <SlidersIcon size={16} color="#5B5648" />
               </button>
             </div>
-            {showOutletMenu && (
-              <div style={styles.outletFilterMenu}>
+            {showFilterPanel && (
+              <div style={styles.filterFullMenu}>
+                <div style={styles.filterFullMenuHeader}>
+                  <strong>필터</strong>
+                  <button type="button" style={styles.filterFullMenuClose} onClick={() => setShowFilterPanel(false)} aria-label="필터 패널 닫기">✕</button>
+                </div>
+                <div style={styles.filterFullMenuGrid}>
+                  <button
+                    onClick={() => setOpenNowOnly((v) => !v)}
+                    style={{ ...styles.filterChip, ...(openNowOnly ? styles.filterChipActive : {}) }}
+                  >
+                    <ClockIcon size={15} color={openNowOnly ? "#FFFDF8" : "#5B5648"} />
+                    지금 영업중
+                  </button>
+                  {FILTERS.filter(({ key }) => key !== "outlet").map(({ key, label, icon: Icon }) => {
+                    const isActive = active.has(key);
+                    return (
+                      <button
+                        key={key}
+                        onClick={() => toggleFilter(key)}
+                        style={{ ...styles.filterChip, ...(isActive ? styles.filterChipActive : {}) }}
+                      >
+                        <Icon size={15} color={isActive ? "#FFFDF8" : "#5B5648"} />
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
                 <strong style={styles.outletFilterTitle}>콘센트 있는 좌석 수</strong>
                 <div style={styles.outletFilterOptions}>
                   <button type="button" style={{ ...styles.outletFilterOption, ...(outletRangeFilter === "any" ? styles.outletFilterOptionActive : {}) }} onClick={() => toggleOutletRangeFilter("any")}>전체</button>
@@ -875,6 +900,14 @@ function CafeFinderInner() {
                     <button key={value} type="button" style={{ ...styles.outletFilterOption, ...(outletRangeFilter === value ? styles.outletFilterOptionActive : {}) }} onClick={() => toggleOutletRangeFilter(value)}>{label}</button>
                   ))}
                 </div>
+                {(active.size > 0 || openNowOnly || outletRangeFilter) && (
+                  <button
+                    onClick={() => { setActive(new Set()); setOpenNowOnly(false); setOutletRangeFilter(null); }}
+                    style={styles.filterFullMenuReset}
+                  >
+                    초기화
+                  </button>
+                )}
               </div>
             )}
             <div style={styles.filterBarFade} />
@@ -1968,11 +2001,15 @@ const styles = {
     background: `linear-gradient(to right, transparent, ${COLOR.bg})`,
     pointerEvents: "none",
   },
-  outletFilterMenu: { position: "absolute", top: "calc(100% + 6px)", left: 16, zIndex: 20, width: 250, padding: 12, borderRadius: 12, border: `1px solid ${COLOR.border}`, background: COLOR.surface, boxShadow: "0 8px 20px rgba(38,36,31,0.16)" },
   outletFilterTitle: { display: "block", marginBottom: 9, color: COLOR.ink, fontSize: 12.5 },
   outletFilterOptions: { display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 7 },
   outletFilterOption: { minHeight: 40, padding: "0 7px", borderRadius: 8, border: `1px solid ${COLOR.border}`, background: COLOR.surface, color: COLOR.inkSoft, fontSize: 12, fontWeight: 600, cursor: "pointer", touchAction: "manipulation" },
   outletFilterOptionActive: { borderColor: COLOR.accent, background: COLOR.accentSoft, color: COLOR.accent },
+  filterFullMenu: { position: "absolute", top: "calc(100% + 6px)", left: 16, right: 16, zIndex: 20, padding: 14, borderRadius: 16, border: `1px solid ${COLOR.border}`, background: COLOR.surface, boxShadow: "0 10px 26px rgba(38,36,31,0.2)" },
+  filterFullMenuHeader: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10, color: COLOR.ink },
+  filterFullMenuClose: { border: "none", background: "transparent", color: COLOR.inkSoft, fontSize: 15, cursor: "pointer", padding: 2 },
+  filterFullMenuGrid: { display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 14 },
+  filterFullMenuReset: { marginTop: 12, width: "100%", padding: "10px 0", borderRadius: 10, border: "none", background: "transparent", color: COLOR.inkSoft, fontSize: 12.5, textDecoration: "underline", cursor: "pointer" },
   filterChip: { display: "flex", alignItems: "center", gap: 6, padding: "8px 13px", borderRadius: 999, border: `1px solid ${COLOR.border}`, background: COLOR.surface, color: COLOR.ink, fontSize: 13, fontWeight: 500, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0, scrollSnapAlign: "start" },
   filterChipActive: { background: COLOR.accent, borderColor: COLOR.accent, color: "#FFFDF8" },
   resetBtn: { padding: "8px 10px", borderRadius: 999, border: "none", background: "transparent", color: COLOR.inkSoft, fontSize: 12, textDecoration: "underline", cursor: "pointer", flexShrink: 0 },
