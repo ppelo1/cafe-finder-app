@@ -1036,30 +1036,70 @@ function CafeDetailModal({ cafe, onClose, onAddReview }) {
   const [selectedPhotoIndex, setSelectedPhotoIndex] = useState(null);
   const [submittingReview, setSubmittingReview] = useState(false);
   const [reviewSubmitError, setReviewSubmitError] = useState("");
-  const swipeStartRef = useRef({ x: 0, y: 0 });
+  const photoViewerRef = useRef(null);
+  const photoDragRef = useRef({ startX: 0, startY: 0, mode: null });
   const swipedRef = useRef(false);
+  const [photoDragOffset, setPhotoDragOffset] = useState(0);
 
-  const handlePhotoTouchStart = (event) => {
-    const t = event.touches[0];
-    swipeStartRef.current = { x: t.clientX, y: t.clientY };
-    swipedRef.current = false;
-  };
-  const handlePhotoTouchMove = (event) => {
-    const t = event.touches[0];
-    const dx = t.clientX - swipeStartRef.current.x;
-    const dy = t.clientY - swipeStartRef.current.y;
-    if (Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy)) swipedRef.current = true;
-  };
-  const handlePhotoTouchEnd = (event) => {
-    if (!swipedRef.current || reviewPhotoList.length < 2) return;
-    const t = event.changedTouches[0];
-    const dx = t.clientX - swipeStartRef.current.x;
-    if (Math.abs(dx) > 40) {
-      setSelectedPhotoIndex((current) => (
-        dx < 0 ? (current + 1) % reviewPhotoList.length : (current - 1 + reviewPhotoList.length) % reviewPhotoList.length
-      ));
-    }
-  };
+  // 좌우로 쓸면 사진 넘기기, 아래로 쓸면 닫기 - 둘 다 같은 제스처 영역을
+  // 쓰므로 첫 움직임의 방향으로 모드를 한 번 고정한다. 아래로 끌 때는
+  // 브라우저의 당겨서 새로고침과 충돌하지 않도록 preventDefault가 필요해서
+  // (React의 onTouchMove는 기본 passive라 안 먹는다) 네이티브로 붙인다.
+  useEffect(() => {
+    const el = photoViewerRef.current;
+    if (!el) return;
+    const onTouchStart = (event) => {
+      const t = event.touches[0];
+      photoDragRef.current = { startX: t.clientX, startY: t.clientY, mode: null };
+      swipedRef.current = false;
+    };
+    const onTouchMove = (event) => {
+      const t = event.touches[0];
+      const dx = t.clientX - photoDragRef.current.startX;
+      const dy = t.clientY - photoDragRef.current.startY;
+      if (!photoDragRef.current.mode && (Math.abs(dx) > 10 || Math.abs(dy) > 10)) {
+        photoDragRef.current.mode = Math.abs(dx) > Math.abs(dy) ? "horizontal" : "vertical";
+      }
+      if (photoDragRef.current.mode === "horizontal") {
+        swipedRef.current = true;
+      } else if (photoDragRef.current.mode === "vertical") {
+        if (dy > 0) {
+          event.preventDefault();
+          swipedRef.current = true;
+          setPhotoDragOffset(dy);
+        } else {
+          photoDragRef.current.mode = null;
+          setPhotoDragOffset(0);
+        }
+      }
+    };
+    const onTouchEnd = (event) => {
+      const mode = photoDragRef.current.mode;
+      if (mode === "horizontal" && reviewPhotoList.length > 1) {
+        const t = event.changedTouches[0];
+        const dx = t.clientX - photoDragRef.current.startX;
+        if (Math.abs(dx) > 40) {
+          setSelectedPhotoIndex((current) => (
+            dx < 0 ? (current + 1) % reviewPhotoList.length : (current - 1 + reviewPhotoList.length) % reviewPhotoList.length
+          ));
+        }
+      } else if (mode === "vertical") {
+        setPhotoDragOffset((current) => {
+          if (current > 90) setSelectedPhotoIndex(null);
+          return 0;
+        });
+      }
+      photoDragRef.current.mode = null;
+    };
+    el.addEventListener("touchstart", onTouchStart, { passive: true });
+    el.addEventListener("touchmove", onTouchMove, { passive: false });
+    el.addEventListener("touchend", onTouchEnd, { passive: true });
+    return () => {
+      el.removeEventListener("touchstart", onTouchStart);
+      el.removeEventListener("touchmove", onTouchMove);
+      el.removeEventListener("touchend", onTouchEnd);
+    };
+  }, [selectedPhotoIndex !== null, reviewPhotoList.length]);
 
   const handleReviewImages = (event) => {
     const files = Array.from(event.target.files || []).slice(0, 5);
@@ -1254,11 +1294,14 @@ function CafeDetailModal({ cafe, onClose, onAddReview }) {
       )}
       {selectedPhotoIndex !== null && (
         <div
-          style={styles.photoViewerOverlay}
+          ref={photoViewerRef}
+          style={{
+            ...styles.photoViewerOverlay,
+            transform: photoDragOffset ? `translateY(${photoDragOffset}px)` : undefined,
+            transition: photoDragOffset ? "none" : "transform 0.2s ease",
+            opacity: photoDragOffset ? Math.max(1 - photoDragOffset / 300, 0.5) : 1,
+          }}
           onClick={() => { if (swipedRef.current) { swipedRef.current = false; return; } setSelectedPhotoIndex(null); }}
-          onTouchStart={handlePhotoTouchStart}
-          onTouchMove={handlePhotoTouchMove}
-          onTouchEnd={handlePhotoTouchEnd}
         >
           <button type="button" style={styles.photoViewerClose} onClick={() => setSelectedPhotoIndex(null)} aria-label="사진 닫기">×</button>
           {reviewPhotoList.length > 1 && (
@@ -2108,7 +2151,7 @@ const styles = {
   emptyPhotoText: { margin: "8px 0 0", color: COLOR.inkSoft, fontSize: 12 },
   centerUploadBtn: { display: "flex", alignItems: "center", gap: 7, minHeight: 48, marginTop: 12, padding: "0 18px", border: "none", borderRadius: 10, background: COLOR.teal, color: "#FFFDF8", fontSize: 13, fontWeight: 600, cursor: "pointer", touchAction: "manipulation" },
   uploadPlus: { fontSize: 22, fontWeight: 300, lineHeight: 1 },
-  photoViewerOverlay: { position: "fixed", inset: 0, zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(10,10,10,0.94)" },
+  photoViewerOverlay: { position: "fixed", inset: 0, zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(10,10,10,0.94)", overscrollBehaviorY: "contain" },
   photoViewerImage: { maxWidth: "100vw", maxHeight: "100vh", objectFit: "contain", userSelect: "none" },
   photoViewerClose: { position: "absolute", top: 16, right: 16, zIndex: 1, width: 44, height: 44, border: "none", borderRadius: 22, background: "rgba(255,255,255,0.14)", color: "#FFFDF8", fontSize: 29, lineHeight: 1, cursor: "pointer" },
   photoViewerNav: { position: "absolute", top: "50%", zIndex: 1, width: 48, height: 64, marginTop: -32, border: "none", borderRadius: 10, background: "rgba(255,255,255,0.16)", color: "#FFFDF8", fontSize: 42, lineHeight: 1, cursor: "pointer" },
