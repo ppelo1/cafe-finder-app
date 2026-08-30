@@ -336,8 +336,8 @@ function SelectedPinIcon({ size = 46, x = 0, y = 0, color }) {
           <path d="M13 10.6c0-.6-.6-.6-.6-1.2M14.8 10.6c0-.6-.6-.6-.6-1.2" />
         </g>
       </g>
-      <circle cx="30" cy="12" r="6" fill="#FFFDF8" stroke={COLOR.teal} strokeWidth="1.2" />
-      <path d="M27.3 12.2l1.7 1.7 3.2-3.6" fill="none" stroke={COLOR.teal} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx="30" cy="12" r="6" fill="#FFFDF8" stroke={color} strokeWidth="1.4" />
+      <path d="M27.3 12.2l1.7 1.7 3.2-3.6" fill="none" stroke={color} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }
@@ -375,8 +375,8 @@ function selectedPinDataUrl(color) {
         <path d="M13 10.6c0-.6-.6-.6-.6-1.2M14.8 10.6c0-.6-.6-.6-.6-1.2"/>
       </g>
     </g>
-    <circle cx="30" cy="12" r="6" fill="#FFFDF8" stroke="${COLOR.teal}" stroke-width="1.2"/>
-    <path d="M27.3 12.2l1.7 1.7 3.2-3.6" fill="none" stroke="${COLOR.teal}" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="30" cy="12" r="6" fill="#FFFDF8" stroke="${color}" stroke-width="1.4"/>
+    <path d="M27.3 12.2l1.7 1.7 3.2-3.6" fill="none" stroke="${color}" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
   </svg>`;
   return "data:image/svg+xml;charset=UTF-8," + encodeURIComponent(svg);
 }
