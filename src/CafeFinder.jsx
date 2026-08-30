@@ -306,9 +306,9 @@ function pinDataUrl(color, filled) {
 const PIN_IMG_TIP_RATIO = { x: 0.496, y: 0.8327 };
 function pinIconSpec(isSelected, isHovered) {
   if (isSelected) {
-    return { url: pinDataUrl(COLOR.teal, true), w: 30, h: 38, scaleW: 52, scaleH: 66, anchorX: 14, anchorY: 34 };
+    return { url: pinDataUrl(COLOR.teal, true), w: 30, h: 38, scaleW: 67, scaleH: 85, anchorX: 14, anchorY: 34 };
   }
-  const size = isHovered ? 56 : 48;
+  const size = isHovered ? 72 : 62;
   return {
     url: pinCafeImg,
     w: size,
