@@ -384,7 +384,7 @@ function selectedPinDataUrl(color) {
 const PIN_IMG_TIP_RATIO = { x: 0.496, y: 0.8327 };
 function pinIconSpec(isSelected, isHovered) {
   if (isSelected) {
-    return { url: selectedPinDataUrl(COLOR.accent), w: 46, h: 50, scaleW: 74, scaleH: 80, anchorX: 23, anchorY: 42 };
+    return { url: selectedPinDataUrl(COLOR.accent), w: 74, h: 80, scaleW: 74, scaleH: 80, anchorX: 37, anchorY: 67 };
   }
   const size = isHovered ? 72 : 62;
   return {
