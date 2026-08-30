@@ -313,6 +313,34 @@ function PinIcon({ size = 30, filled, color }) {
     </svg>
   );
 }
+function SelectedPinIcon({ size = 46, x = 0, y = 0, color }) {
+  return (
+    <svg x={x} y={y} width={size} height={(size * 50) / 46} viewBox="0 0 46 50" fill="none">
+      <defs>
+        <filter id="cf-pin-glow" x="-60%" y="-60%" width="220%" height="220%">
+          <feGaussianBlur stdDeviation="5" />
+        </filter>
+      </defs>
+      <circle cx="23" cy="20" r="17" fill={color} opacity="0.45" filter="url(#cf-pin-glow)" />
+      <g transform="translate(8 6)">
+        <ellipse cx="15" cy="36.5" rx="6.5" ry="2" fill="rgba(38,36,31,0.22)" />
+        <path
+          d="M15 1C7.8 1 2 6.8 2 14c0 9.6 11.3 21.6 12 22.3.5.5 1.2.5 1.8 0C16.6 35.6 28 23.6 28 14 28 6.8 22.2 1 15 1z"
+          fill={color}
+        />
+        <circle cx="15" cy="14" r="6.2" fill="#FFFDF8" stroke={color} strokeWidth="1" />
+        <g fill="none" stroke={color} strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
+          <ellipse cx="14.5" cy="17.6" rx="4.3" ry="0.75" />
+          <path d="M11 12h7v2.2a3.2 3.2 0 01-3.2 3.2h-0.6A3.2 3.2 0 0111 14.2V12z" />
+          <path d="M18 12.8h1a1.3 1.3 0 010 2.6h-1" />
+          <path d="M13 10.6c0-.6-.6-.6-.6-1.2M14.8 10.6c0-.6-.6-.6-.6-1.2" />
+        </g>
+      </g>
+      <circle cx="30" cy="12" r="6" fill="#FFFDF8" stroke={COLOR.teal} strokeWidth="1.2" />
+      <path d="M27.3 12.2l1.7 1.7 3.2-3.6" fill="none" stroke={COLOR.teal} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
 function pinDataUrl(color, filled) {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="30" height="38" viewBox="0 0 30 38">
     <ellipse cx="15" cy="36.5" rx="6.5" ry="2" fill="rgba(38,36,31,0.22)"/>
@@ -327,11 +355,36 @@ function pinDataUrl(color, filled) {
   </svg>`;
   return "data:image/svg+xml;charset=UTF-8," + encodeURIComponent(svg);
 }
+/* 선택된 카페 핀 - 은은한 발광 후광 + 체크 배지가 붙은 강조 버전 */
+function selectedPinDataUrl(color) {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="46" height="50" viewBox="0 0 46 50">
+    <defs>
+      <filter id="g" x="-60%" y="-60%" width="220%" height="220%">
+        <feGaussianBlur stdDeviation="5"/>
+      </filter>
+    </defs>
+    <circle cx="23" cy="20" r="17" fill="${color}" opacity="0.45" filter="url(#g)"/>
+    <g transform="translate(8 6)">
+      <ellipse cx="15" cy="36.5" rx="6.5" ry="2" fill="rgba(38,36,31,0.22)"/>
+      <path d="M15 1C7.8 1 2 6.8 2 14c0 9.6 11.3 21.6 12 22.3.5.5 1.2.5 1.8 0C16.6 35.6 28 23.6 28 14 28 6.8 22.2 1 15 1z" fill="${color}"/>
+      <circle cx="15" cy="14" r="6.2" fill="#FFFDF8" stroke="${color}" stroke-width="1"/>
+      <g fill="none" stroke="${color}" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round">
+        <ellipse cx="14.5" cy="17.6" rx="4.3" ry="0.75"/>
+        <path d="M11 12h7v2.2a3.2 3.2 0 01-3.2 3.2h-0.6A3.2 3.2 0 0111 14.2V12z"/>
+        <path d="M18 12.8h1a1.3 1.3 0 010 2.6h-1"/>
+        <path d="M13 10.6c0-.6-.6-.6-.6-1.2M14.8 10.6c0-.6-.6-.6-.6-1.2"/>
+      </g>
+    </g>
+    <circle cx="30" cy="12" r="6" fill="#FFFDF8" stroke="${COLOR.teal}" stroke-width="1.2"/>
+    <path d="M27.3 12.2l1.7 1.7 3.2-3.6" fill="none" stroke="${COLOR.teal}" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>`;
+  return "data:image/svg+xml;charset=UTF-8," + encodeURIComponent(svg);
+}
 /* map-pin-cafe.png 원본(1254x1254) 안에서 핀 끝(지도 좌표를 가리키는 점)의 비율 위치 */
 const PIN_IMG_TIP_RATIO = { x: 0.496, y: 0.8327 };
 function pinIconSpec(isSelected, isHovered) {
   if (isSelected) {
-    return { url: pinDataUrl(COLOR.teal, true), w: 30, h: 38, scaleW: 67, scaleH: 85, anchorX: 14, anchorY: 34 };
+    return { url: selectedPinDataUrl(COLOR.accent), w: 46, h: 50, scaleW: 74, scaleH: 80, anchorX: 23, anchorY: 42 };
   }
   const size = isHovered ? 72 : 62;
   return {
@@ -1980,9 +2033,12 @@ function MockMapView({ cafes, selected, hovered, onSelect, onHover, pickMode, on
             style={{ cursor: "pointer" }}
           >
             {isSelected ? (
-              <g transform={`translate(-3 -7.26) scale(${scale * 0.2})`}>
-                <PinIcon filled color="#3D6B5F" />
-              </g>
+              <SelectedPinIcon
+                size={13.5 * scale}
+                x={(-13.5 * scale * 23) / 46}
+                y={(-13.5 * scale * 42.4) / 46}
+                color={COLOR.accent}
+              />
             ) : (
               <image
                 href={pinCafeImg}
@@ -1993,7 +2049,7 @@ function MockMapView({ cafes, selected, hovered, onSelect, onHover, pickMode, on
               />
             )}
             {(isSelected || isHovered) && (
-              <g transform="translate(0 -9.5)">
+              <g transform={`translate(0 ${isSelected ? -17.5 : -9.5})`}>
                 <rect x={-((c.name.length * 1.9 + 3) / 2)} y="-3.6" width={c.name.length * 1.9 + 3} height="5.4" rx="1.4" fill="#26241F" />
                 <text x="0" y="0.3" textAnchor="middle" fontSize="2.6" fill="#FFFDF8" fontFamily="'Noto Sans KR', sans-serif">{c.name}</text>
               </g>
