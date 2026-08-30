@@ -1,0 +1,19 @@
+#!/bin/sh
+# Auto-push after every commit. Enable with:  git config core.hooksPath .githooks
+# Never blocks the commit: a failed push just prints a note.
+
+branch=$(git symbolic-ref --short HEAD 2>/dev/null) || exit 0
+
+# Skip during rebase / merge / cherry-pick / bisect.
+git_dir=$(git rev-parse --git-dir 2>/dev/null)
+for marker in rebase-merge rebase-apply MERGE_HEAD CHERRY_PICK_HEAD BISECT_LOG; do
+  [ -e "$git_dir/$marker" ] && exit 0
+done
+
+echo "[post-commit] pushing $branch to origin..."
+if git push origin "$branch"; then
+  echo "[post-commit] pushed."
+else
+  echo "[post-commit] push failed - commit is saved locally, run 'git push' later."
+fi
+exit 0
