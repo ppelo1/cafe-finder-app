@@ -304,7 +304,7 @@ function CupSteamIcon({ size = 20, color = "currentColor" }) {
 /* 검색창 배경 이미지용 로고(커피잔+김+"카페찾기") - 별도 엘리먼트가 아니라
    input의 background-image라서 그 위 공간에도 그대로 타이핑할 수 있다. */
 function searchLogoBackgroundUrl(color) {
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="112" height="24" viewBox="0 0 112 24">
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="84" height="24" viewBox="0 0 84 24">
     <g fill="none" stroke="${color}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
       <ellipse cx="7.5" cy="17.6" rx="6.2" ry="1.05"/>
       <path d="M2 9h11v3.4A4.6 4.6 0 018.4 17h-0.8A4.6 4.6 0 013 12.4V9z"/>
@@ -2027,7 +2027,7 @@ const styles = {
     backgroundImage: `url("${searchLogoBackgroundUrl("rgba(107,99,85,0.42)")}")`,
     backgroundRepeat: "no-repeat",
     backgroundPosition: "right center",
-    backgroundSize: "104px 22px",
+    backgroundSize: "78px 22px",
     fontSize: 15,
     color: COLOR.ink,
     fontFamily: "'Noto Sans KR', sans-serif",
@@ -2043,6 +2043,7 @@ const styles = {
     padding: "0 16px",
     overflowX: "auto",
     scrollSnapType: "x proximity",
+    scrollPaddingLeft: 16,
     WebkitOverflowScrolling: "touch",
     scrollbarWidth: "none",
     cursor: "grab",
