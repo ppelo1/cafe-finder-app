@@ -255,6 +255,31 @@ function SlidersIcon({ size = 16, color = "currentColor" }) {
 function ClockIcon({ size = 16, color = "currentColor" }) {
   return <MaskIcon src={openNowIconImg} size={size} color={color} />;
 }
+function ChairIcon({ size = 16, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <path d="M6 4v9a2 2 0 002 2h8a2 2 0 002-2V4" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M6 8.5h12" stroke={color} strokeWidth="1.6" />
+      <path d="M8 15v5M16 15v5" stroke={color} strokeWidth="1.6" strokeLinecap="round" />
+    </svg>
+  );
+}
+function PhoneIcon({ size = 16, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <path d="M5 4h3.3l1.4 3.8-1.9 1.5a11.5 11.5 0 005.9 5.9l1.5-1.9 3.8 1.4V18a2 2 0 01-2 2C10.7 20 4 13.3 4 6a2 2 0 011-2z" stroke={color} strokeWidth="1.6" strokeLinejoin="round" strokeLinecap="round" />
+    </svg>
+  );
+}
+function PhotoPlaceholderIcon({ size = 40, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <rect x="3" y="4" width="18" height="16" rx="2.5" stroke={color} strokeWidth="1.5" />
+      <circle cx="8.5" cy="9.5" r="1.6" stroke={color} strokeWidth="1.5" />
+      <path d="M3.5 16.5l5-5 3.5 3.5 3-3 5.5 5.5" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
 function CuteIcon({ size = 16, color = "currentColor" }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
@@ -1179,6 +1204,7 @@ function CafeDetailModal({ cafe, onClose, onAddReview }) {
         }}
         onClick={(event) => event.stopPropagation()}
       >
+        <div style={styles.detailDragHandle} aria-hidden="true" />
         <div style={styles.detailHeader}>
           <div>
             <p style={styles.detailEyebrow}>카페 상세 정보</p>
@@ -1195,10 +1221,25 @@ function CafeDetailModal({ cafe, onClose, onAddReview }) {
         </div>
         <p style={styles.detailDescription}>{cafe.desc || "등록된 소개가 없습니다."}</p>
         <div style={styles.detailInfoGrid}>
-          <div><span style={styles.detailInfoLabel}>영업시간</span><strong>{cafe.hours}</strong></div>
-          <div><span style={styles.detailInfoLabel}>상태</span><strong style={openState ? styles.openText : styles.closedText}>{openState === null ? "정보 없음" : openState ? "영업중" : "영업종료"}</strong></div>
-          <div><span style={styles.detailInfoLabel}>좌석</span><strong>{cafe.seats}석</strong></div>
-          <div><span style={styles.detailInfoLabel}>전화번호</span><strong>{cafe.phone || "등록된 번호 없음"}</strong></div>
+          <div style={styles.infoCard}>
+            <span style={styles.detailInfoLabel}><ClockIcon size={14} color={COLOR.inkSoft} />영업시간</span>
+            <strong style={styles.infoCardValue}>{cafe.hours}</strong>
+          </div>
+          <div style={styles.infoCard}>
+            <span style={styles.detailInfoLabel}>
+              <span style={{ ...styles.statusDot, background: openState === null ? COLOR.inkSoft : openState ? COLOR.teal : COLOR.accent }} />
+              상태
+            </span>
+            <strong style={{ ...styles.infoCardValue, ...(openState ? styles.openText : styles.closedText) }}>{openState === null ? "정보 없음" : openState ? "영업중" : "영업종료"}</strong>
+          </div>
+          <div style={styles.infoCard}>
+            <span style={styles.detailInfoLabel}><ChairIcon size={14} color={COLOR.inkSoft} />좌석</span>
+            <strong style={styles.infoCardValue}>{cafe.seats}석</strong>
+          </div>
+          <div style={styles.infoCard}>
+            <span style={styles.detailInfoLabel}><PhoneIcon size={14} color={COLOR.inkSoft} />전화번호</span>
+            <strong style={styles.infoCardValue}>{cafe.phone || "등록된 번호 없음"}</strong>
+          </div>
         </div>
         <a href={naverMapUrl} target="_blank" rel="noreferrer" style={styles.naverMapLink}>네이버 지도에서 보기 ↗</a>
         <section style={styles.reviewSection}>
@@ -1235,6 +1276,7 @@ function CafeDetailModal({ cafe, onClose, onAddReview }) {
                 <div style={styles.photoGallery}>{reviewPhotoList.map((image, index) => <button type="button" key={`${image}-${index}`} style={styles.galleryImageButton} onClick={() => setSelectedPhotoIndex(index)}><img src={image} alt={`카페 리뷰 사진 ${index + 1}`} style={styles.galleryImage} /></button>)}</div>
               ) : (
                 <div style={styles.emptyPhotoState}>
+                  <PhotoPlaceholderIcon size={40} color={COLOR.border} />
                   <p style={styles.emptyPhotoText}>아직 등록된 사진이 없습니다.</p>
                   <button type="button" style={styles.centerUploadBtn} onClick={() => { setComposerMode("photo"); setShowReviewComposer(true); }}>
                     <span style={styles.uploadPlus}>+</span>
@@ -2098,8 +2140,9 @@ const styles = {
   closedBadge: { marginLeft: 6, padding: "1px 7px", borderRadius: 999, background: "#EDE3DD", color: "#9B7A68", fontWeight: 600, fontSize: 10.5 },
   mapPaneMobile: { position: "absolute", inset: 0, overflow: "hidden" },
   mapSvg: { width: "100%", height: "100%", display: "block" },
-  detailOverlay: { position: "fixed", inset: 0, zIndex: 60, display: "flex", alignItems: "center", justifyContent: "center", padding: 12, background: "rgba(38,36,31,0.5)", animation: "cf-fade-in 0.18s ease" },
-  detailModal: { width: "100%", maxWidth: 560, maxHeight: "94vh", overflowY: "auto", overscrollBehaviorY: "contain", padding: 20, borderRadius: 18, background: COLOR.surface, boxShadow: "0 10px 30px rgba(38,36,31,0.22)", animation: "cf-modal-up 0.22s ease" },
+  detailOverlay: { position: "fixed", inset: 0, zIndex: 60, display: "flex", alignItems: "flex-end", justifyContent: "center", background: "rgba(38,36,31,0.5)", animation: "cf-fade-in 0.18s ease" },
+  detailModal: { width: "100%", maxWidth: 560, maxHeight: "94vh", overflowY: "auto", overscrollBehaviorY: "contain", padding: "10px 20px 20px", borderRadius: "18px 18px 0 0", background: COLOR.surface, boxShadow: "0 -8px 26px rgba(38,36,31,0.18)", animation: "cf-sheet-up 0.22s ease" },
+  detailDragHandle: { width: 40, height: 4, borderRadius: 2, background: COLOR.border, margin: "0 auto 14px" },
   detailHeader: { display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10 },
   detailEyebrow: { margin: 0, color: COLOR.accent, fontSize: 11.5, fontWeight: 600 },
   detailTitle: { margin: "3px 0 0", fontFamily: "'Noto Serif KR', serif", fontSize: 22 },
@@ -2124,9 +2167,12 @@ const styles = {
   },
   detailAddress: { margin: "0 0 10px", color: COLOR.inkSoft, fontSize: 13 },
   detailDescription: { margin: "8px 0 14px", color: "#514C40", fontSize: 13.5, lineHeight: 1.55 },
-  detailInfoGrid: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1, marginBottom: 16, overflow: "hidden", borderRadius: 10, background: COLOR.border },
+  detailInfoGrid: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 },
+  infoCard: { display: "flex", flexDirection: "column", gap: 6, padding: "12px 14px", borderRadius: 12, border: `1px solid ${COLOR.borderSoft}`, background: COLOR.surface },
+  infoCardValue: { fontSize: 15, fontWeight: 700, color: COLOR.ink },
+  statusDot: { width: 8, height: 8, borderRadius: 4, flexShrink: 0 },
   detailInfoGridItem: { padding: 10, background: COLOR.surface },
-  detailInfoLabel: { display: "block", marginBottom: 3, color: COLOR.inkSoft, fontSize: 11.5 },
+  detailInfoLabel: { display: "flex", alignItems: "center", gap: 5, color: COLOR.inkSoft, fontSize: 11.5 },
   naverMapLink: { display: "block", margin: "0 0 16px", color: COLOR.teal, fontSize: 11.5, fontWeight: 600, textAlign: "right", textDecoration: "underline", textUnderlineOffset: 3 },
   reviewSection: { borderTop: `1px solid ${COLOR.border}`, paddingTop: 15 },
   detailTabs: { display: "flex", gap: 4, marginBottom: 15, borderBottom: `1px solid ${COLOR.border}` },
@@ -2231,8 +2277,8 @@ const styles = {
   dayClosed: { display: "flex", alignItems: "center", gap: 8, flex: 1, minHeight: 44, padding: "5px 9px", borderRadius: 9, color: COLOR.ink, fontSize: 13, cursor: "pointer", touchAction: "manipulation" },
   dayClosedActive: { background: COLOR.accentSoft, color: COLOR.accent },
   dayCheckbox: { width: 24, height: 24, margin: 0, accentColor: COLOR.accent, cursor: "pointer" },
-  openText: { marginLeft: "auto", color: COLOR.teal, fontSize: 12, fontWeight: 600 },
-  closedText: { color: COLOR.accent, fontSize: 12 },
+  openText: { color: COLOR.teal },
+  closedText: { color: COLOR.accent },
   dayHoursText: { color: COLOR.inkSoft, fontSize: 12 },
   timeInputs: { display: "flex", alignItems: "center", gap: 5, color: COLOR.inkSoft, fontSize: 12 },
   timePicker: { display: "flex", alignItems: "center", borderRadius: 9, border: `1px solid ${COLOR.border}`, background: COLOR.surface },
