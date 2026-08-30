@@ -1,4 +1,14 @@
 import React, { useState, useMemo, useRef, useEffect, useLayoutEffect, useCallback } from "react";
+import logoCupImg from "./assets/icons/logo-cafe-cup.png";
+import searchIconImg from "./assets/icons/icon-search.png";
+import filterIconImg from "./assets/icons/icon-filter.png";
+import openNowIconImg from "./assets/icons/icon-open-now.png";
+import largeCafeIconImg from "./assets/icons/icon-large-cafe.png";
+import interiorIconImg from "./assets/icons/icon-interior.png";
+import mapIconImg from "./assets/icons/icon-map.png";
+import listIconImg from "./assets/icons/icon-list.png";
+import registerIconImg from "./assets/icons/icon-cafe-register.png";
+import pinCafeImg from "./assets/icons/map-pin-cafe.png";
 
 /* =========================================================================
    네이버 지도 연동 안내
@@ -193,6 +203,28 @@ function isOpenNow(hoursStr, weeklyHours) {
 }
 
 /* ---------- 아이콘 ---------- */
+/* 대표님이 보내주신 아이콘 PNG를 currentColor로 물들일 수 있게 mask-image로 렌더링 */
+function MaskIcon({ src, size = 16, color = "currentColor" }) {
+  return (
+    <span
+      style={{
+        display: "inline-block",
+        flexShrink: 0,
+        width: size,
+        height: size,
+        backgroundColor: color,
+        WebkitMaskImage: `url(${src})`,
+        maskImage: `url(${src})`,
+        WebkitMaskSize: "contain",
+        maskSize: "contain",
+        WebkitMaskRepeat: "no-repeat",
+        maskRepeat: "no-repeat",
+        WebkitMaskPosition: "center",
+        maskPosition: "center",
+      }}
+    />
+  );
+}
 function OutletIcon({ size = 16, color = "currentColor" }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
@@ -204,26 +236,10 @@ function OutletIcon({ size = 16, color = "currentColor" }) {
   );
 }
 function BuildingIcon({ size = 16, color = "currentColor" }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      <rect x="5" y="3" width="10" height="18" rx="1" stroke={color} strokeWidth="1.6" />
-      <rect x="15" y="9" width="5" height="12" rx="1" stroke={color} strokeWidth="1.6" />
-      <line x1="8" y1="7" x2="8" y2="7.01" stroke={color} strokeWidth="2" strokeLinecap="round" />
-      <line x1="12" y1="7" x2="12" y2="7.01" stroke={color} strokeWidth="2" strokeLinecap="round" />
-      <line x1="8" y1="11" x2="8" y2="11.01" stroke={color} strokeWidth="2" strokeLinecap="round" />
-      <line x1="12" y1="11" x2="12" y2="11.01" stroke={color} strokeWidth="2" strokeLinecap="round" />
-      <line x1="8" y1="15" x2="8" y2="15.01" stroke={color} strokeWidth="2" strokeLinecap="round" />
-      <line x1="12" y1="15" x2="12" y2="15.01" stroke={color} strokeWidth="2" strokeLinecap="round" />
-    </svg>
-  );
+  return <MaskIcon src={largeCafeIconImg} size={size} color={color} />;
 }
 function SparkleIcon({ size = 16, color = "currentColor" }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      <path d="M12 3l1.8 5.4L19 10l-5.2 1.6L12 17l-1.8-5.4L5 10l5.2-1.6L12 3z" stroke={color} strokeWidth="1.4" strokeLinejoin="round" />
-      <path d="M19 15l0.7 2 2 0.7-2 0.7-0.7 2-0.7-2-2-0.7 2-0.7 0.7-2z" stroke={color} strokeWidth="1.1" strokeLinejoin="round" />
-    </svg>
-  );
+  return <MaskIcon src={interiorIconImg} size={size} color={color} />;
 }
 function ParkingIcon({ size = 16, color = "currentColor" }) {
   return (
@@ -234,24 +250,10 @@ function ParkingIcon({ size = 16, color = "currentColor" }) {
   );
 }
 function SlidersIcon({ size = 16, color = "currentColor" }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      <line x1="3" y1="6" x2="21" y2="6" stroke={color} strokeWidth="1.6" strokeLinecap="round" />
-      <line x1="3" y1="12" x2="21" y2="12" stroke={color} strokeWidth="1.6" strokeLinecap="round" />
-      <line x1="3" y1="18" x2="21" y2="18" stroke={color} strokeWidth="1.6" strokeLinecap="round" />
-      <circle cx="9" cy="6" r="2.2" fill={COLOR.surface} stroke={color} strokeWidth="1.6" />
-      <circle cx="16" cy="12" r="2.2" fill={COLOR.surface} stroke={color} strokeWidth="1.6" />
-      <circle cx="8" cy="18" r="2.2" fill={COLOR.surface} stroke={color} strokeWidth="1.6" />
-    </svg>
-  );
+  return <MaskIcon src={filterIconImg} size={size} color={color} />;
 }
 function ClockIcon({ size = 16, color = "currentColor" }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      <circle cx="12" cy="12" r="8.5" stroke={color} strokeWidth="1.6" />
-      <path d="M12 7.5V12l3 2" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
+  return <MaskIcon src={openNowIconImg} size={size} color={color} />;
 }
 function CuteIcon({ size = 16, color = "currentColor" }) {
   return (
@@ -266,12 +268,7 @@ function CuteIcon({ size = 16, color = "currentColor" }) {
   );
 }
 function SearchIcon({ size = 16, color = "currentColor" }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      <circle cx="11" cy="11" r="7" stroke={color} strokeWidth="1.8" />
-      <line x1="16.2" y1="16.2" x2="21" y2="21" stroke={color} strokeWidth="1.8" strokeLinecap="round" />
-    </svg>
-  );
+  return <MaskIcon src={searchIconImg} size={size} color={color} />;
 }
 function PinIcon({ size = 30, filled, color }) {
   return (
@@ -291,30 +288,6 @@ function PinIcon({ size = 30, filled, color }) {
     </svg>
   );
 }
-function CupSteamIcon({ size = 20, color = "currentColor" }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      <ellipse cx="10.5" cy="19.2" rx="7.5" ry="1.3" stroke={color} strokeWidth="1.5" />
-      <path d="M5 9h11v4a5.5 5.5 0 01-5.5 5.5h0A5.5 5.5 0 015 13V9z" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M16 10.5h1.6a2.3 2.3 0 010 4.6H16" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M8.5 7c0-1.3-1.6-1.3-1.6-2.6M13.5 7c0-1.3-1.6-1.3-1.6-2.6" stroke={color} strokeWidth="1.3" strokeLinecap="round" />
-    </svg>
-  );
-}
-/* 검색창 배경 이미지용 로고(커피잔+김+"카페찾기") - 별도 엘리먼트가 아니라
-   input의 background-image라서 그 위 공간에도 그대로 타이핑할 수 있다. */
-function searchLogoBackgroundUrl(color) {
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="84" height="24" viewBox="0 0 84 24">
-    <g fill="none" stroke="${color}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-      <ellipse cx="7.5" cy="17.6" rx="6.2" ry="1.05"/>
-      <path d="M2 9h11v3.4A4.6 4.6 0 018.4 17h-0.8A4.6 4.6 0 013 12.4V9z"/>
-      <path d="M13 10.2h1.6a1.9 1.9 0 010 3.8H13"/>
-      <path d="M5.3 7c0-1-1.2-1-1.2-2M9 7c0-1-1.2-1-1.2-2"/>
-    </g>
-    <text x="20" y="15.5" font-family="'Noto Sans KR', 'Malgun Gothic', sans-serif" font-size="12.5" font-weight="700" fill="${color}">카페찾기</text>
-  </svg>`;
-  return "data:image/svg+xml;charset=UTF-8," + encodeURIComponent(svg);
-}
 function pinDataUrl(color, filled) {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="30" height="38" viewBox="0 0 30 38">
     <ellipse cx="15" cy="36.5" rx="6.5" ry="2" fill="rgba(38,36,31,0.22)"/>
@@ -328,6 +301,23 @@ function pinDataUrl(color, filled) {
     </g>
   </svg>`;
   return "data:image/svg+xml;charset=UTF-8," + encodeURIComponent(svg);
+}
+/* map-pin-cafe.png 원본(1254x1254) 안에서 핀 끝(지도 좌표를 가리키는 점)의 비율 위치 */
+const PIN_IMG_TIP_RATIO = { x: 0.496, y: 0.8327 };
+function pinIconSpec(isSelected, isHovered) {
+  if (isSelected) {
+    return { url: pinDataUrl(COLOR.teal, true), w: 30, h: 38, scaleW: 52, scaleH: 66, anchorX: 14, anchorY: 34 };
+  }
+  const size = isHovered ? 56 : 48;
+  return {
+    url: pinCafeImg,
+    w: size,
+    h: size,
+    scaleW: size,
+    scaleH: size,
+    anchorX: Math.round(size * PIN_IMG_TIP_RATIO.x),
+    anchorY: Math.round(size * PIN_IMG_TIP_RATIO.y),
+  };
 }
 
 /* ---------- 네이버 지도 스크립트 로더 ---------- */
@@ -797,7 +787,7 @@ function CafeFinderInner() {
 
         <div ref={overlayRef} style={styles.overlayControls}>
           <div style={styles.searchBar}>
-            <SearchIcon size={16} color={COLOR.inkSoft} />
+            <SearchIcon size={18} color={COLOR.inkSoft} />
             <input
               style={styles.searchInput}
               value={queryInput}
@@ -812,6 +802,12 @@ function CafeFinderInner() {
               }}
               placeholder="카페 이름, 동네로 검색"
             />
+            {!queryInput && (
+              <span style={styles.searchLogo} aria-hidden="true">
+                <img src={logoCupImg} alt="" style={styles.searchLogoIcon} />
+                카페찾기
+              </span>
+            )}
             {queryInput && (
               <button
                 style={styles.searchClearBtn}
@@ -935,22 +931,21 @@ function CafeFinderInner() {
               style={{ ...styles.mobileTabBtn, ...(mobileTab === "map" ? styles.mobileTabBtnActive : {}) }}
               onClick={() => setMobileTab("map")}
             >
+              <MaskIcon src={mapIconImg} size={15} color={mobileTab === "map" ? "#FFFDF8" : COLOR.ink} />
               지도
             </button>
             <button
               style={{ ...styles.mobileTabBtn, ...(mobileTab === "list" ? styles.mobileTabBtnActive : {}) }}
               onClick={() => setMobileTab("list")}
             >
+              <MaskIcon src={listIconImg} size={15} color={mobileTab === "list" ? "#FFFDF8" : COLOR.ink} />
               목록 ({filtered.length})
             </button>
           </div>
         </div>
 
         <button style={styles.addBtnFloating} onClick={() => { setPickedLoc(null); setShowForm(true); }}>
-          <span style={styles.addBtnIconWrap} aria-hidden="true">
-            <CupSteamIcon size={22} color="#FFFDF8" />
-            <span style={styles.addBtnPlusBadge}>+</span>
-          </span>
+          <img src={registerIconImg} alt="" aria-hidden="true" style={styles.addBtnIcon} />
           <span style={styles.addBtnLabel}>카페 등록</span>
         </button>
       </div>
@@ -1772,14 +1767,15 @@ function NaverRealMap({ cafes, allCafes, selected, hovered, onSelect, onHover, p
         // 마커가 항상 기본색으로만 생성되던 문제.
         const idIsSelected = String(selectedRef.current) === idStr;
         const idIsHovered = String(hoveredRef.current) === idStr;
+        const spec = pinIconSpec(idIsSelected, idIsHovered);
         const marker = new naver.maps.Marker({
           position: new naver.maps.LatLng(c.lat, c.lng),
           map,
           icon: {
-            url: pinDataUrl(idIsSelected ? COLOR.teal : "#B5533C", idIsSelected || idIsHovered),
-            size: new naver.maps.Size(30, 38),
-            scaledSize: new naver.maps.Size(idIsSelected ? 44 : 32, idIsSelected ? 56 : 41),
-            anchor: new naver.maps.Point(14, 34),
+            url: spec.url,
+            size: new naver.maps.Size(spec.w, spec.h),
+            scaledSize: new naver.maps.Size(spec.scaleW, spec.scaleH),
+            anchor: new naver.maps.Point(spec.anchorX, spec.anchorY),
           },
         });
         naver.maps.Event.addListener(marker, "click", () => {
@@ -1818,12 +1814,12 @@ function NaverRealMap({ cafes, allCafes, selected, hovered, onSelect, onHover, p
       Object.entries(markersRef.current).forEach(([idStr, marker]) => {
         const isSelected = String(selected) === idStr;
         const isHovered = String(hovered) === idStr;
-        const color = isSelected ? COLOR.teal : "#B5533C";
+        const spec = pinIconSpec(isSelected, isHovered);
         marker.setIcon({
-          url: pinDataUrl(color, isSelected || isHovered),
-          size: new naver.maps.Size(30, 38),
-          scaledSize: new naver.maps.Size(isSelected ? 44 : 32, isSelected ? 56 : 41),
-          anchor: new naver.maps.Point(14, 34),
+          url: spec.url,
+          size: new naver.maps.Size(spec.w, spec.h),
+          scaledSize: new naver.maps.Size(spec.scaleW, spec.scaleH),
+          anchor: new naver.maps.Point(spec.anchorX, spec.anchorY),
         });
       });
     } catch (e) {
@@ -1941,9 +1937,19 @@ function MockMapView({ cafes, selected, hovered, onSelect, onHover, pickMode, on
             onMouseLeave={() => onHover(null)}
             style={{ cursor: "pointer" }}
           >
-            <g transform={`translate(-3 -7.26) scale(${scale * 0.2})`}>
-              <PinIcon filled={isSelected || isHovered} color={isSelected ? "#3D6B5F" : "#B5533C"} />
-            </g>
+            {isSelected ? (
+              <g transform={`translate(-3 -7.26) scale(${scale * 0.2})`}>
+                <PinIcon filled color="#3D6B5F" />
+              </g>
+            ) : (
+              <image
+                href={pinCafeImg}
+                width={9 * scale}
+                height={9 * scale}
+                x={-(9 * scale) * PIN_IMG_TIP_RATIO.x}
+                y={-(9 * scale) * PIN_IMG_TIP_RATIO.y}
+              />
+            )}
             {(isSelected || isHovered) && (
               <g transform="translate(0 -9.5)">
                 <rect x={-((c.name.length * 1.9 + 3) / 2)} y="-3.6" width={c.name.length * 1.9 + 3} height="5.4" rx="1.4" fill="#26241F" />
@@ -2014,26 +2020,23 @@ const styles = {
     boxShadow: "0 0 44px rgba(38,36,31,0.14)",
   },
   addBtnFloating: { position: "absolute", right: 16, bottom: "calc(16px + env(safe-area-inset-bottom, 0px))", zIndex: 25, width: 78, height: 78, borderRadius: 39, border: "none", background: COLOR.accent, color: "#FFFDF8", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 2, cursor: "pointer", boxShadow: "0 8px 20px rgba(181,83,60,0.45)" },
-  addBtnIconWrap: { position: "relative", display: "flex", alignItems: "center", justifyContent: "center" },
-  addBtnPlusBadge: { position: "absolute", top: -3, right: -9, width: 16, height: 16, borderRadius: 8, background: "#FFFDF8", color: COLOR.accent, fontSize: 11, fontWeight: 700, lineHeight: "16px", textAlign: "center" },
+  addBtnIcon: { width: 28, height: 28, display: "block" },
   addBtnLabel: { fontSize: 10.5, fontWeight: 700 },
   overlayControls: { position: "absolute", top: 0, left: 0, right: 0, zIndex: 30, paddingTop: "calc(10px + env(safe-area-inset-top, 0px))" },
-  searchBar: { display: "flex", alignItems: "center", gap: 10, margin: "0 16px 10px", padding: "10px 14px", borderRadius: 999, border: `1px solid ${COLOR.borderSoft}`, background: COLOR.surface, boxShadow: "0 6px 16px rgba(38,36,31,0.14)" },
+  searchBar: { display: "flex", alignItems: "center", gap: 12, margin: "0 16px 10px", padding: "16px 18px", minHeight: 30, borderRadius: 999, border: `1px solid ${COLOR.borderSoft}`, background: COLOR.surface, boxShadow: "0 6px 16px rgba(38,36,31,0.14)" },
   searchInput: {
     flex: 1,
+    minWidth: 0,
     border: "none",
     outline: "none",
     backgroundColor: "transparent",
-    backgroundImage: `url("${searchLogoBackgroundUrl("rgba(107,99,85,0.42)")}")`,
-    backgroundRepeat: "no-repeat",
-    backgroundPosition: "right center",
-    backgroundSize: "78px 22px",
-    fontSize: 15,
+    fontSize: 17,
     color: COLOR.ink,
     fontFamily: "'Noto Sans KR', sans-serif",
-    minWidth: 0,
   },
-  searchClearBtn: { border: "none", background: "transparent", color: COLOR.inkSoft, fontSize: 13, cursor: "pointer", padding: 2 },
+  searchLogo: { display: "flex", alignItems: "center", gap: 4, flexShrink: 0, pointerEvents: "none", color: "rgba(107,99,85,0.55)", fontSize: 13, fontWeight: 700, whiteSpace: "nowrap" },
+  searchLogoIcon: { width: 16, height: 16, opacity: 0.65 },
+  searchClearBtn: { border: "none", background: "transparent", color: COLOR.inkSoft, fontSize: 13, cursor: "pointer", padding: 2, flexShrink: 0 },
   filterBarWrap: { position: "relative", margin: "0 0 12px" },
   filterBar: {
     display: "flex",
@@ -2076,7 +2079,7 @@ const styles = {
   mapNoticeText: { flex: 1, lineHeight: 1.4 },
   mapNoticeClose: { flexShrink: 0, border: "none", background: "transparent", color: COLOR.inkSoft, fontSize: 13, cursor: "pointer", padding: 2 },
   mobileTabBar: { display: "flex", gap: 8, padding: "0 16px 10px" },
-  mobileTabBtn: { flex: 1, padding: "10px 0", borderRadius: 10, border: `1px solid ${COLOR.borderSoft}`, background: COLOR.surface, color: COLOR.ink, fontSize: 14, fontWeight: 600, cursor: "pointer", boxShadow: "0 4px 12px rgba(38,36,31,0.10)" },
+  mobileTabBtn: { flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "10px 0", borderRadius: 10, border: `1px solid ${COLOR.borderSoft}`, background: COLOR.surface, color: COLOR.ink, fontSize: 14, fontWeight: 600, cursor: "pointer", boxShadow: "0 4px 12px rgba(38,36,31,0.10)" },
   mobileTabBtnActive: { background: COLOR.ink, borderColor: COLOR.ink, color: "#FFFDF8" },
   mainMobile: { flex: 1, minHeight: 0, position: "relative" },
   listPaneMobile: { position: "absolute", inset: 0, overflowY: "auto", display: "flex", flexDirection: "column", gap: 10, padding: "0 16px 84px" },
