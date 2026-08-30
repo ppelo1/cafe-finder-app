@@ -2020,7 +2020,7 @@ const styles = {
     boxShadow: "0 0 44px rgba(38,36,31,0.14)",
   },
   addBtnFloating: { position: "absolute", right: 16, bottom: "calc(16px + env(safe-area-inset-bottom, 0px))", zIndex: 25, width: 78, height: 78, borderRadius: 39, border: "none", background: COLOR.accent, color: "#FFFDF8", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 2, cursor: "pointer", boxShadow: "0 8px 20px rgba(181,83,60,0.45)" },
-  addBtnIcon: { width: 28, height: 28, display: "block" },
+  addBtnIcon: { width: 38, height: 38, display: "block" },
   addBtnLabel: { fontSize: 10.5, fontWeight: 700 },
   overlayControls: { position: "absolute", top: 0, left: 0, right: 0, zIndex: 30, paddingTop: "calc(10px + env(safe-area-inset-top, 0px))" },
   searchBar: { display: "flex", alignItems: "center", gap: 12, margin: "0 16px 10px", padding: "16px 18px", minHeight: 30, borderRadius: 999, border: `1px solid ${COLOR.borderSoft}`, background: COLOR.surface, boxShadow: "0 6px 16px rgba(38,36,31,0.14)" },
