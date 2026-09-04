@@ -360,6 +360,30 @@ function pinIconSpec(isSelected, isHovered) {
   };
 }
 
+function escapeHtml(text) {
+  return String(text).replace(/[&<>"']/g, (ch) => (
+    { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]
+  ));
+}
+
+/* 네이버 지도 마커: 핀 이미지 + 바로 밑에 카페 이름 라벨 (HTML content 아이콘) */
+function markerIcon(naver, spec, name) {
+  const label =
+    `<div style="position:absolute;left:${spec.anchorX}px;top:${spec.anchorY}px;` +
+    `transform:translate(-50%,3px);white-space:nowrap;pointer-events:none;` +
+    `font:600 12px/1.15 'Noto Sans KR',-apple-system,BlinkMacSystemFont,sans-serif;` +
+    `color:#26241F;text-shadow:0 0 3px #FFFDF8,0 0 3px #FFFDF8,0 1px 2px rgba(255,253,248,0.95);">` +
+    `${escapeHtml(name)}</div>`;
+  return {
+    content:
+      `<div style="position:relative;width:${spec.scaleW}px;height:${spec.scaleH}px;">` +
+      `<img src="${spec.url}" width="${spec.scaleW}" height="${spec.scaleH}" style="display:block;" alt=""/>` +
+      label +
+      `</div>`,
+    anchor: new naver.maps.Point(spec.anchorX, spec.anchorY),
+  };
+}
+
 /* ---------- 네이버 지도 스크립트 로더 ---------- */
 function useNaverMapsScript(clientId) {
   const [status, setStatus] = useState(clientId ? "loading" : "unavailable");
@@ -1828,12 +1852,8 @@ function NaverRealMap({ cafes, allCafes, selected, hovered, onSelect, onHover, p
         const marker = new naver.maps.Marker({
           position: new naver.maps.LatLng(c.lat, c.lng),
           map,
-          icon: {
-            url: spec.url,
-            size: new naver.maps.Size(spec.w, spec.h),
-            scaledSize: new naver.maps.Size(spec.scaleW, spec.scaleH),
-            anchor: new naver.maps.Point(spec.anchorX, spec.anchorY),
-          },
+          icon: markerIcon(naver, spec, c.name),
+          zIndex: idIsSelected ? 1000 : 1,
         });
         naver.maps.Event.addListener(marker, "click", () => {
           try { onSelectRef.current(c.id); } catch (e) { console.error(e); }
@@ -1872,12 +1892,9 @@ function NaverRealMap({ cafes, allCafes, selected, hovered, onSelect, onHover, p
         const isSelected = String(selected) === idStr;
         const isHovered = String(hovered) === idStr;
         const spec = pinIconSpec(isSelected, isHovered);
-        marker.setIcon({
-          url: spec.url,
-          size: new naver.maps.Size(spec.w, spec.h),
-          scaledSize: new naver.maps.Size(spec.scaleW, spec.scaleH),
-          anchor: new naver.maps.Point(spec.anchorX, spec.anchorY),
-        });
+        const cafe = cafes.find((x) => String(x.id) === idStr);
+        marker.setIcon(markerIcon(naver, spec, cafe ? cafe.name : ""));
+        if (typeof marker.setZIndex === "function") marker.setZIndex(isSelected ? 1000 : 1);
       });
     } catch (e) {
       console.error("마커 아이콘 갱신 실패:", e);
@@ -2009,11 +2026,27 @@ function MockMapView({ cafes, selected, hovered, onSelect, onHover, pickMode, on
                 y={-(9 * scale) * PIN_IMG_TIP_RATIO.y}
               />
             )}
-            {(isSelected || isHovered) && (
-              <g transform={`translate(0 ${isSelected ? -17.5 : -9.5})`}>
-                <rect x={-((c.name.length * 1.9 + 3) / 2)} y="-3.6" width={c.name.length * 1.9 + 3} height="5.4" rx="1.4" fill="#26241F" />
-                <text x="0" y="0.3" textAnchor="middle" fontSize="2.6" fill="#FFFDF8" fontFamily="'Noto Sans KR', sans-serif">{c.name}</text>
+            {/* 마커 밑에 카페 이름 라벨 (항상 표시, 선택/호버 시 강조) */}
+            {(isSelected || isHovered) ? (
+              <g transform={`translate(0 ${3.4 * scale})`}>
+                <rect x={-((c.name.length * 1.9 + 3) / 2)} y="0" width={c.name.length * 1.9 + 3} height="5.4" rx="1.4" fill="#26241F" />
+                <text x="0" y="3.9" textAnchor="middle" fontSize="2.6" fill="#FFFDF8" fontFamily="'Noto Sans KR', sans-serif">{c.name}</text>
               </g>
+            ) : (
+              <text
+                x="0"
+                y={3.4 + 3.9}
+                textAnchor="middle"
+                fontSize="2.5"
+                fontWeight="600"
+                fill="#26241F"
+                stroke="#FFFDF8"
+                strokeWidth="0.9"
+                paintOrder="stroke"
+                fontFamily="'Noto Sans KR', sans-serif"
+              >
+                {c.name}
+              </text>
             )}
           </g>
         );
