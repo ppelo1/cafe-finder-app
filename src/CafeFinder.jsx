@@ -366,21 +366,25 @@ function escapeHtml(text) {
   ));
 }
 
-/* 네이버 지도 마커: 핀 이미지 + 바로 밑에 카페 이름 라벨 (HTML content 아이콘) */
-function markerIcon(naver, spec, name) {
-  const label =
-    `<div style="position:absolute;left:${spec.anchorX}px;top:${spec.anchorY}px;` +
-    `transform:translate(-50%,3px);white-space:nowrap;pointer-events:none;` +
-    `font:600 12px/1.15 'Noto Sans KR',-apple-system,BlinkMacSystemFont,sans-serif;` +
-    `color:#26241F;text-shadow:0 0 3px #FFFDF8,0 0 3px #FFFDF8,0 1px 2px rgba(255,253,248,0.95);">` +
-    `${escapeHtml(name)}</div>`;
+/* 네이버 지도 핀 아이콘 (이미지) */
+function pinImageIcon(naver, spec) {
+  return {
+    url: spec.url,
+    size: new naver.maps.Size(spec.w, spec.h),
+    scaledSize: new naver.maps.Size(spec.scaleW, spec.scaleH),
+    anchor: new naver.maps.Point(spec.anchorX, spec.anchorY),
+  };
+}
+
+/* 핀 바로 밑에 붙는 카페 이름 라벨 (별도 마커 - content 아이콘이라 잘리지 않음) */
+function labelIcon(naver, name) {
   return {
     content:
-      `<div style="position:relative;width:${spec.scaleW}px;height:${spec.scaleH}px;">` +
-      `<img src="${spec.url}" width="${spec.scaleW}" height="${spec.scaleH}" style="display:block;" alt=""/>` +
-      label +
-      `</div>`,
-    anchor: new naver.maps.Point(spec.anchorX, spec.anchorY),
+      `<div style="display:inline-block;transform:translateX(-50%);white-space:nowrap;` +
+      `font:600 12px/1.15 'Noto Sans KR',-apple-system,BlinkMacSystemFont,sans-serif;` +
+      `color:#26241F;text-shadow:0 0 3px #FFFDF8,0 0 3px #FFFDF8,0 1px 2px rgba(255,253,248,0.95);">` +
+      `${escapeHtml(name)}</div>`,
+    anchor: new naver.maps.Point(0, -6),
   };
 }
 
@@ -1774,6 +1778,7 @@ function NaverRealMap({ cafes, allCafes, selected, hovered, onSelect, onHover, p
   const mapRef = useRef(null);
   const mapObj = useRef(null);
   const markersRef = useRef({});
+  const labelsRef = useRef({});
   const pickMarkerRef = useRef(null);
   const boundsFitRef = useRef(false);
   const onSelectRef = useRef(onSelect);
@@ -1830,17 +1835,34 @@ function NaverRealMap({ cafes, allCafes, selected, hovered, onSelect, onHover, p
     const map = mapObj.current;
     try {
       const currentIds = new Set(cafes.map((c) => String(c.id)));
-      Object.keys(markersRef.current).forEach((idStr) => {
-        if (!currentIds.has(idStr)) {
-          try { markersRef.current[idStr].setMap(null); } catch (e) {}
-          delete markersRef.current[idStr];
-        }
+      [markersRef, labelsRef].forEach((ref) => {
+        Object.keys(ref.current).forEach((idStr) => {
+          if (!currentIds.has(idStr)) {
+            try { ref.current[idStr].setMap(null); } catch (e) {}
+            delete ref.current[idStr];
+          }
+        });
       });
 
       cafes.forEach((c) => {
         const idStr = String(c.id);
+        const position = new naver.maps.LatLng(c.lat, c.lng);
+
+        // 카페 이름 라벨 (핀 밑, 클릭 불가, 항상 표시)
+        if (labelsRef.current[idStr]) {
+          labelsRef.current[idStr].setPosition(position);
+        } else {
+          labelsRef.current[idStr] = new naver.maps.Marker({
+            position,
+            map,
+            icon: labelIcon(naver, c.name),
+            clickable: false,
+            zIndex: 1,
+          });
+        }
+
         if (markersRef.current[idStr]) {
-          markersRef.current[idStr].setPosition(new naver.maps.LatLng(c.lat, c.lng));
+          markersRef.current[idStr].setPosition(position);
           return;
         }
         // 새로 생기는 마커도 지금 선택/호버 상태를 바로 반영해야 한다 -
@@ -1850,10 +1872,10 @@ function NaverRealMap({ cafes, allCafes, selected, hovered, onSelect, onHover, p
         const idIsHovered = String(hoveredRef.current) === idStr;
         const spec = pinIconSpec(idIsSelected, idIsHovered);
         const marker = new naver.maps.Marker({
-          position: new naver.maps.LatLng(c.lat, c.lng),
+          position,
           map,
-          icon: markerIcon(naver, spec, c.name),
-          zIndex: idIsSelected ? 1000 : 1,
+          icon: pinImageIcon(naver, spec),
+          zIndex: idIsSelected ? 1000 : 2,
         });
         naver.maps.Event.addListener(marker, "click", () => {
           try { onSelectRef.current(c.id); } catch (e) { console.error(e); }
@@ -1892,9 +1914,8 @@ function NaverRealMap({ cafes, allCafes, selected, hovered, onSelect, onHover, p
         const isSelected = String(selected) === idStr;
         const isHovered = String(hovered) === idStr;
         const spec = pinIconSpec(isSelected, isHovered);
-        const cafe = cafes.find((x) => String(x.id) === idStr);
-        marker.setIcon(markerIcon(naver, spec, cafe ? cafe.name : ""));
-        if (typeof marker.setZIndex === "function") marker.setZIndex(isSelected ? 1000 : 1);
+        marker.setIcon(pinImageIcon(naver, spec));
+        if (typeof marker.setZIndex === "function") marker.setZIndex(isSelected ? 1000 : 2);
       });
     } catch (e) {
       console.error("마커 아이콘 갱신 실패:", e);
