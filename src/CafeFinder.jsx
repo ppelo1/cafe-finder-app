@@ -10,7 +10,7 @@ import listIconImg from "./assets/icons/icon-list.png";
 import registerIconImg from "./assets/icons/icon-cafe-register.png";
 import pinCafeImg from "./assets/icons/map-pin-cafe.png";
 import pinCafeSelectedImg from "./assets/icons/map-pin-cafe-selected.png";
-import { supabase, isSupabaseConfigured } from "./lib/supabase";
+import { supabase, isSupabaseConfigured, devLoginEnabled } from "./lib/supabase";
 
 /* =========================================================================
    네이버 지도 연동 안내
@@ -451,21 +451,37 @@ function useDaumPostcodeScript() {
   return ready;
 }
 
-/* ---------- Supabase 로그인 상태 ---------- */
+/* ---------- 로그인 상태 (Supabase OAuth 또는 로컬 테스트 로그인) ---------- */
+const DEV_USER_STORAGE_KEY = "cafe-finder:dev-user";
+
+function makeDevUser(provider) {
+  const label = provider === "kakao" ? "카카오 테스트" : provider === "google" ? "구글 테스트" : "테스트";
+  return { id: `dev-${provider}`, email: `${provider}@dev.local`, user_metadata: { name: label }, isDev: true };
+}
+
 function useAuth() {
   const [user, setUser] = useState(null);
-  const [authReady, setAuthReady] = useState(!isSupabaseConfigured);
+  const [authReady, setAuthReady] = useState(!isSupabaseConfigured && !devLoginEnabled);
 
   useEffect(() => {
+    if (devLoginEnabled) {
+      try {
+        const saved = JSON.parse(localStorage.getItem(DEV_USER_STORAGE_KEY) || "null");
+        if (saved) setUser(saved);
+      } catch (e) {
+        /* noop */
+      }
+      setAuthReady(true);
+    }
     if (!supabase) return;
     let active = true;
     supabase.auth.getSession().then(({ data }) => {
       if (!active) return;
-      setUser(data.session?.user ?? null);
+      if (data.session?.user) setUser((cur) => (cur?.isDev ? cur : data.session.user));
       setAuthReady(true);
     });
     const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
+      setUser((cur) => (cur?.isDev ? cur : session?.user ?? null));
     });
     return () => {
       active = false;
@@ -474,6 +490,12 @@ function useAuth() {
   }, []);
 
   const signIn = useCallback((provider) => {
+    if (devLoginEnabled) {
+      const devUser = makeDevUser(provider);
+      try { localStorage.setItem(DEV_USER_STORAGE_KEY, JSON.stringify(devUser)); } catch (e) { /* noop */ }
+      setUser(devUser);
+      return Promise.resolve({});
+    }
     if (!supabase) return Promise.resolve({ error: new Error("로그인이 설정되지 않았습니다.") });
     return supabase.auth.signInWithOAuth({
       provider,
@@ -481,18 +503,35 @@ function useAuth() {
     });
   }, []);
 
-  const signOut = useCallback(() => supabase?.auth.signOut(), []);
+  const signOut = useCallback(async () => {
+    try { localStorage.removeItem(DEV_USER_STORAGE_KEY); } catch (e) { /* noop */ }
+    setUser(null);
+    if (supabase) await supabase.auth.signOut();
+  }, []);
 
   return { user, authReady, signIn, signOut };
 }
 
-/* ---------- 즐겨찾기 (로그인 계정에 저장) ---------- */
+/* ---------- 즐겨찾기 (로그인 계정에 저장) ----------
+   - 로컬 테스트 로그인이거나 Supabase 미설정: 계정 id별로 localStorage 에 저장
+   - Supabase 로그인: favorites 테이블에 저장 (RLS: 본인 것만)                */
 function useFavorites(user) {
   const [favoriteIds, setFavoriteIds] = useState(() => new Set());
+  const useLocal = !supabase || !!user?.isDev;
+  const localKey = user ? `cafe-finder:favorites:${user.id}` : null;
 
   useEffect(() => {
-    if (!supabase || !user) {
+    if (!user) {
       setFavoriteIds(new Set());
+      return;
+    }
+    if (useLocal) {
+      try {
+        const saved = JSON.parse(localStorage.getItem(localKey) || "[]");
+        setFavoriteIds(new Set((saved || []).map(Number)));
+      } catch (e) {
+        setFavoriteIds(new Set());
+      }
       return;
     }
     let active = true;
@@ -511,31 +550,34 @@ function useFavorites(user) {
     return () => {
       active = false;
     };
-  }, [user]);
+  }, [user, useLocal, localKey]);
 
   const toggleFavorite = useCallback(
     async (cafeId) => {
-      if (!supabase || !user) return;
+      if (!user) return;
       const id = Number(cafeId);
       const wasFavorite = favoriteIds.has(id);
-      setFavoriteIds((prev) => {
-        const next = new Set(prev);
-        wasFavorite ? next.delete(id) : next.add(id);
-        return next;
-      });
+      const next = new Set(favoriteIds);
+      wasFavorite ? next.delete(id) : next.add(id);
+      setFavoriteIds(next);
+
+      if (useLocal) {
+        try { localStorage.setItem(localKey, JSON.stringify([...next])); } catch (e) { /* noop */ }
+        return;
+      }
       const { error } = wasFavorite
         ? await supabase.from("favorites").delete().match({ user_id: user.id, cafe_id: id })
         : await supabase.from("favorites").insert({ user_id: user.id, cafe_id: id });
       if (error) {
         console.warn("즐겨찾기 저장 실패:", error.message);
         setFavoriteIds((prev) => {
-          const next = new Set(prev);
-          wasFavorite ? next.add(id) : next.delete(id);
-          return next;
+          const rb = new Set(prev);
+          wasFavorite ? rb.add(id) : rb.delete(id);
+          return rb;
         });
       }
     },
-    [user, favoriteIds]
+    [user, favoriteIds, useLocal, localKey]
   );
 
   return { favoriteIds, toggleFavorite };
@@ -1204,7 +1246,7 @@ function LoginModal({ onClose, onSignIn, reason }) {
         <button type="button" style={styles.detailCloseBtn} onClick={onClose} aria-label="닫기">×</button>
         <h2 style={styles.loginTitle}>로그인</h2>
         <p style={styles.loginDesc}>{reason || "로그인하면 즐겨찾기가 계정에 저장됩니다."}</p>
-        {isSupabaseConfigured ? (
+        {(isSupabaseConfigured || devLoginEnabled) ? (
           <>
             <button type="button" style={{ ...styles.snsBtn, ...styles.kakaoBtn }} disabled={!!busy} onClick={() => handle("kakao")}>
               {busy === "kakao" ? "이동 중..." : "카카오로 계속하기"}
@@ -1212,11 +1254,15 @@ function LoginModal({ onClose, onSignIn, reason }) {
             <button type="button" style={{ ...styles.snsBtn, ...styles.googleBtn }} disabled={!!busy} onClick={() => handle("google")}>
               {busy === "google" ? "이동 중..." : "Google로 계속하기"}
             </button>
-            <p style={styles.loginFinePrint}>처음이면 자동으로 가입됩니다.</p>
+            <p style={styles.loginFinePrint}>
+              {devLoginEnabled
+                ? "로컬 테스트 모드 · 실제 SNS 인증 없이 바로 로그인됩니다."
+                : "처음이면 자동으로 가입됩니다."}
+            </p>
           </>
         ) : (
           <p style={styles.loginFinePrint}>
-            로그인이 아직 설정되지 않았습니다. <code>docs/auth-setup.md</code> 를 참고해 Supabase 키를 등록해주세요.
+            로그인이 아직 설정되지 않았습니다. <code>docs/auth-setup.md</code> 를 참고해 Supabase 키를 등록하거나 <code>VITE_DEV_LOGIN=true</code> 로 로컬 테스트를 켜주세요.
           </p>
         )}
       </div>
