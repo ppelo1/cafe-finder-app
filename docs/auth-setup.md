@@ -79,6 +79,26 @@ VITE_DEV_LOGIN=true
 4. 생성된 Client ID / Client Secret 을 Supabase
    **Authentication → Providers → Google** 에 입력, 활성화
 
+## 5-B. 로그인이 "Unable to exchange external code" 로 실패할 때
+
+Kakao 로그인 화면까지는 뜨는데 로그인 후 실패하면, **거의 항상 Client Secret 불일치**입니다.
+(Supabase 가 Kakao 토큰 엔드포인트에 코드 교환 요청을 보내는데 `client_secret` 이 안 맞음)
+
+둘 중 하나로 맞추세요:
+
+- **A. 양쪽 다 끄기** (간단):
+  - Kakao 콘솔 → Client Secret → **활성화 상태 = 사용 안 함**
+  - Supabase → Providers → Kakao → `Client Secret` 칸 **비움** → Save
+- **B. 양쪽 다 켜고 값 일치**:
+  - Kakao 콘솔에서 Client Secret 코드 발급 + **활성화 상태 = 사용함**
+  - 그 코드를 Supabase `Client Secret` 칸에 정확히 붙여넣기 → Save
+
+그래도 안 되면 확인:
+- Supabase → **Authentication → URL Configuration → Redirect URLs** 에
+  `http://localhost:5173/` (또는 `http://localhost:5173/**`) 와 배포 주소가 있는지
+- Kakao → **동의항목** 에서 `카카오계정(이메일)` 이 최소 **선택 동의** 인지
+  (Supabase 가 요청하는 scope 에 `account_email` 이 포함됨)
+
 ## 5. 확인
 
 ```

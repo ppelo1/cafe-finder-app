@@ -459,11 +459,30 @@ function makeDevUser(provider) {
   return { id: `dev-${provider}`, email: `${provider}@dev.local`, user_metadata: { name: label }, isDev: true };
 }
 
+// OAuth 콜백이 실패로 돌아오면 URL 의 hash 또는 query 에 error 정보가 담긴다.
+function readOAuthErrorFromUrl() {
+  const parts = [window.location.hash.replace(/^#/, ""), window.location.search.replace(/^\?/, "")];
+  for (const part of parts) {
+    if (!part) continue;
+    const params = new URLSearchParams(part);
+    const desc = params.get("error_description") || params.get("error_code") || params.get("error");
+    if (desc) return decodeURIComponent(desc.replace(/\+/g, " "));
+  }
+  return null;
+}
+
 function useAuth() {
   const [user, setUser] = useState(null);
   const [authReady, setAuthReady] = useState(!isSupabaseConfigured && !devLoginEnabled);
+  const [authError, setAuthError] = useState(null);
 
   useEffect(() => {
+    const oauthError = readOAuthErrorFromUrl();
+    if (oauthError) {
+      setAuthError(oauthError);
+      // 에러 파라미터를 URL 에서 제거 (새로고침 시 반복 방지)
+      window.history.replaceState({}, "", window.location.pathname + window.location.search.replace(/[?&](error|error_code|error_description)=[^&]*/g, "").replace(/^&/, "?"));
+    }
     if (devLoginEnabled) {
       try {
         const saved = JSON.parse(localStorage.getItem(DEV_USER_STORAGE_KEY) || "null");
@@ -509,7 +528,7 @@ function useAuth() {
     if (supabase) await supabase.auth.signOut();
   }, []);
 
-  return { user, authReady, signIn, signOut };
+  return { user, authReady, signIn, signOut, authError, clearAuthError: () => setAuthError(null) };
 }
 
 /* ---------- 즐겨찾기 (로그인 계정에 저장) ----------
@@ -708,10 +727,15 @@ function CafeFinderInner() {
   const [favoritesOnly, setFavoritesOnly] = useState(false);
 
   const mapStatus = useNaverMapsScript(NAVER_CONFIG.clientId);
-  const { user, signIn, signOut } = useAuth();
+  const { user, signIn, signOut, authError, clearAuthError } = useAuth();
   const { favoriteIds, toggleFavorite } = useFavorites(user);
 
   const requireLogin = () => setShowLogin(true);
+
+  // OAuth 콜백이 에러로 돌아오면 로그인 팝업을 다시 띄우고 이유를 보여준다
+  useEffect(() => {
+    if (authError) setShowLogin(true);
+  }, [authError]);
 
   // 로그인되면 로그인 팝업을 닫고, 로그아웃되면 즐겨찾기 전용 보기도 해제
   useEffect(() => {
@@ -1212,7 +1236,11 @@ function CafeFinderInner() {
       )}
 
       {showLogin && (
-        <LoginModal onClose={() => setShowLogin(false)} onSignIn={signIn} />
+        <LoginModal
+          onClose={() => { setShowLogin(false); clearAuthError(); }}
+          onSignIn={signIn}
+          errorText={authError}
+        />
       )}
 
       {showForm && (
@@ -1230,7 +1258,7 @@ function CafeFinderInner() {
 }
 
 /* ---------- SNS 로그인 팝업 (카카오 / 구글) ---------- */
-function LoginModal({ onClose, onSignIn, reason }) {
+function LoginModal({ onClose, onSignIn, reason, errorText }) {
   const [busy, setBusy] = useState(null);
   const handle = async (provider) => {
     setBusy(provider);
@@ -1248,6 +1276,11 @@ function LoginModal({ onClose, onSignIn, reason }) {
       <div style={styles.loginModal} onClick={(event) => event.stopPropagation()}>
         <button type="button" style={styles.detailCloseBtn} onClick={onClose} aria-label="닫기">×</button>
         <h2 style={styles.loginTitle}>로그인</h2>
+        {errorText && (
+          <p style={styles.loginErrorBox}>
+            로그인에 실패했어요: {errorText}
+          </p>
+        )}
         <p style={styles.loginDesc}>{reason || "로그인하면 즐겨찾기가 계정에 저장됩니다."}</p>
         {(isSupabaseConfigured || devLoginEnabled) ? (
           <>
@@ -2545,6 +2578,7 @@ const styles = {
   loginModal: { position: "relative", background: COLOR.surface, borderRadius: "18px 18px 0 0", padding: "26px 22px 30px", maxWidth: 480, width: "100%", boxShadow: "0 -8px 26px rgba(38,36,31,0.18)", animation: "cf-sheet-up 0.22s ease" },
   loginTitle: { margin: "0 0 6px", fontFamily: "'Noto Serif KR', serif", fontSize: 20, fontWeight: 700 },
   loginDesc: { margin: "0 0 18px", fontSize: 13, color: COLOR.inkSoft, lineHeight: 1.5 },
+  loginErrorBox: { margin: "0 0 14px", padding: "10px 12px", borderRadius: 8, background: "#FBEAE7", color: "#8A2C1A", fontSize: 12.5, lineHeight: 1.5, wordBreak: "break-word" },
   snsBtn: { display: "flex", alignItems: "center", justifyContent: "center", width: "100%", minHeight: 48, marginTop: 10, border: "none", borderRadius: 10, fontSize: 14.5, fontWeight: 700, cursor: "pointer" },
   kakaoBtn: { background: "#FEE500", color: "rgba(0,0,0,0.85)" },
   googleBtn: { background: "#FFFFFF", color: "#1F1F1F", border: "1px solid #DADCE0" },
