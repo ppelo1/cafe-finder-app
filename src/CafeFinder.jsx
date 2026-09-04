@@ -10,6 +10,7 @@ import listIconImg from "./assets/icons/icon-list.png";
 import registerIconImg from "./assets/icons/icon-cafe-register.png";
 import pinCafeImg from "./assets/icons/map-pin-cafe.png";
 import pinCafeSelectedImg from "./assets/icons/map-pin-cafe-selected.png";
+import { supabase, isSupabaseConfigured } from "./lib/supabase";
 
 /* =========================================================================
    네이버 지도 연동 안내
@@ -450,6 +451,96 @@ function useDaumPostcodeScript() {
   return ready;
 }
 
+/* ---------- Supabase 로그인 상태 ---------- */
+function useAuth() {
+  const [user, setUser] = useState(null);
+  const [authReady, setAuthReady] = useState(!isSupabaseConfigured);
+
+  useEffect(() => {
+    if (!supabase) return;
+    let active = true;
+    supabase.auth.getSession().then(({ data }) => {
+      if (!active) return;
+      setUser(data.session?.user ?? null);
+      setAuthReady(true);
+    });
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+    });
+    return () => {
+      active = false;
+      sub.subscription.unsubscribe();
+    };
+  }, []);
+
+  const signIn = useCallback((provider) => {
+    if (!supabase) return Promise.resolve({ error: new Error("로그인이 설정되지 않았습니다.") });
+    return supabase.auth.signInWithOAuth({
+      provider,
+      options: { redirectTo: window.location.origin + import.meta.env.BASE_URL },
+    });
+  }, []);
+
+  const signOut = useCallback(() => supabase?.auth.signOut(), []);
+
+  return { user, authReady, signIn, signOut };
+}
+
+/* ---------- 즐겨찾기 (로그인 계정에 저장) ---------- */
+function useFavorites(user) {
+  const [favoriteIds, setFavoriteIds] = useState(() => new Set());
+
+  useEffect(() => {
+    if (!supabase || !user) {
+      setFavoriteIds(new Set());
+      return;
+    }
+    let active = true;
+    supabase
+      .from("favorites")
+      .select("cafe_id")
+      .eq("user_id", user.id)
+      .then(({ data, error }) => {
+        if (!active) return;
+        if (error) {
+          console.warn("즐겨찾기 불러오기 실패:", error.message);
+          return;
+        }
+        setFavoriteIds(new Set((data || []).map((row) => Number(row.cafe_id))));
+      });
+    return () => {
+      active = false;
+    };
+  }, [user]);
+
+  const toggleFavorite = useCallback(
+    async (cafeId) => {
+      if (!supabase || !user) return;
+      const id = Number(cafeId);
+      const wasFavorite = favoriteIds.has(id);
+      setFavoriteIds((prev) => {
+        const next = new Set(prev);
+        wasFavorite ? next.delete(id) : next.add(id);
+        return next;
+      });
+      const { error } = wasFavorite
+        ? await supabase.from("favorites").delete().match({ user_id: user.id, cafe_id: id })
+        : await supabase.from("favorites").insert({ user_id: user.id, cafe_id: id });
+      if (error) {
+        console.warn("즐겨찾기 저장 실패:", error.message);
+        setFavoriteIds((prev) => {
+          const next = new Set(prev);
+          wasFavorite ? next.add(id) : next.delete(id);
+          return next;
+        });
+      }
+    },
+    [user, favoriteIds]
+  );
+
+  return { favoriteIds, toggleFavorite };
+}
+
 /* 네이버 지오코딩 - 주소 문자열을 좌표로 변환 (submodules=geocoder 필요) */
 function geocodeAddressResults(query, callback) {
   if (!window.naver || !window.naver.maps || !window.naver.maps.Service) {
@@ -571,8 +662,19 @@ function CafeFinderInner() {
   const [showFilterPanel, setShowFilterPanel] = useState(false);
   const [mapNoticeDismissed, setMapNoticeDismissed] = useState(false);
   const [mapViewport, setMapViewport] = useState(null);
+  const [showLogin, setShowLogin] = useState(false);
+  const [favoritesOnly, setFavoritesOnly] = useState(false);
 
   const mapStatus = useNaverMapsScript(NAVER_CONFIG.clientId);
+  const { user, signIn, signOut } = useAuth();
+  const { favoriteIds, toggleFavorite } = useFavorites(user);
+
+  const requireLogin = () => setShowLogin(true);
+
+  // 로그인이 풀리면 즐겨찾기 전용 보기도 해제
+  useEffect(() => {
+    if (!user) setFavoritesOnly(false);
+  }, [user]);
 
   // 테스트 단계: DB/백엔드 없이 브라우저 localStorage에만 저장한다.
   // 백엔드 구성 후에는 이 블록을 /api 호출로 교체하면 된다.
@@ -655,13 +757,17 @@ function CafeFinderInner() {
         [c.name, c.dong, c.address, c.desc].some((v) => v.toLowerCase().includes(q))
       );
     }
+    if (favoritesOnly) {
+      list = list.filter((c) => favoriteIds.has(Number(c.id)));
+    }
     return list;
-  }, [active, cafes, query, openNowOnly, outletRangeFilter]);
+  }, [active, cafes, query, openNowOnly, outletRangeFilter, favoritesOnly, favoriteIds]);
 
   const mapCafes = useMemo(() => {
-    if (!mapViewport) return filtered;
+    // 즐겨찾기 보기일 땐 흩어져 있어도 다 보이도록 뷰포트 필터를 건너뛴다.
+    if (favoritesOnly || !mapViewport) return filtered;
     return filtered.filter((cafe) => cafeInViewport(cafe, mapViewport));
-  }, [filtered, mapViewport]);
+  }, [filtered, mapViewport, favoritesOnly]);
 
   const handleMapViewportChange = useCallback((viewport) => {
     setMapViewport(viewport);
@@ -785,7 +891,11 @@ function CafeFinderInner() {
         >
             {filtered.length === 0 && (
               <div style={styles.emptyState}>
-                {query ? `'${query}'에 맞는 카페가 없어요.` : "조건에 맞는 카페가 없어요. 필터를 줄여보세요."}
+                {favoritesOnly
+                  ? "즐겨찾기한 카페가 없어요. 상세보기에서 별표를 눌러 추가해보세요."
+                  : query
+                  ? `'${query}'에 맞는 카페가 없어요.`
+                  : "조건에 맞는 카페가 없어요. 필터를 줄여보세요."}
               </div>
             )}
             {filtered.map((c) => (
@@ -1012,6 +1122,34 @@ function CafeFinderInner() {
           </div>
         </div>
 
+        {mobileTab === "map" && user && (
+          <button
+            type="button"
+            style={styles.accountBtn}
+            onClick={() => { if (window.confirm("로그아웃 할까요?")) signOut(); }}
+            aria-label="로그아웃"
+            title={user.email || "로그인됨"}
+          >
+            {(user.email || user.user_metadata?.name || "?").trim().charAt(0).toUpperCase()}
+          </button>
+        )}
+
+        {mobileTab === "map" && (
+          <button
+            type="button"
+            style={{ ...styles.favoritesToggleBtn, ...(favoritesOnly ? styles.favoritesToggleBtnActive : {}) }}
+            onClick={() => {
+              if (!user) { requireLogin(); return; }
+              setFavoritesOnly((v) => !v);
+            }}
+            aria-pressed={favoritesOnly}
+            aria-label="즐겨찾기한 카페만 보기"
+          >
+            <span style={styles.favoritesToggleStar}>{favoritesOnly ? "★" : "☆"}</span>
+            <span style={styles.favoritesToggleLabel}>즐겨찾기</span>
+          </button>
+        )}
+
         <button style={styles.addBtnFloating} onClick={() => { setPickedLoc(null); setShowForm(true); }}>
           <img src={registerIconImg} alt="" aria-hidden="true" style={styles.addBtnIcon} />
           <span style={styles.addBtnLabel}>카페 등록</span>
@@ -1019,7 +1157,19 @@ function CafeFinderInner() {
       </div>
 
       {detailCafe && (
-        <CafeDetailModal cafe={detailCafe} onClose={() => setDetailCafeId(null)} onAddReview={addReview} />
+        <CafeDetailModal
+          cafe={detailCafe}
+          onClose={() => setDetailCafeId(null)}
+          onAddReview={addReview}
+          isLoggedIn={!!user}
+          isFavorite={favoriteIds.has(Number(detailCafe.id))}
+          onToggleFavorite={toggleFavorite}
+          onRequireLogin={requireLogin}
+        />
+      )}
+
+      {showLogin && (
+        <LoginModal onClose={() => setShowLogin(false)} onSignIn={signIn} />
       )}
 
       {showForm && (
@@ -1036,7 +1186,45 @@ function CafeFinderInner() {
   );
 }
 
-function CafeDetailModal({ cafe, onClose, onAddReview }) {
+/* ---------- SNS 로그인 팝업 (카카오 / 구글) ---------- */
+function LoginModal({ onClose, onSignIn, reason }) {
+  const [busy, setBusy] = useState(null);
+  const handle = async (provider) => {
+    setBusy(provider);
+    const { error } = (await onSignIn(provider)) || {};
+    if (error) {
+      setBusy(null);
+      alert(error.message || "로그인을 시작할 수 없습니다.");
+    }
+    // 성공 시 OAuth 페이지로 리다이렉트되므로 여기서 별도 처리 없음
+  };
+  return (
+    <div style={styles.modalOverlay} onClick={onClose}>
+      <div style={styles.loginModal} onClick={(event) => event.stopPropagation()}>
+        <button type="button" style={styles.detailCloseBtn} onClick={onClose} aria-label="닫기">×</button>
+        <h2 style={styles.loginTitle}>로그인</h2>
+        <p style={styles.loginDesc}>{reason || "로그인하면 즐겨찾기가 계정에 저장됩니다."}</p>
+        {isSupabaseConfigured ? (
+          <>
+            <button type="button" style={{ ...styles.snsBtn, ...styles.kakaoBtn }} disabled={!!busy} onClick={() => handle("kakao")}>
+              {busy === "kakao" ? "이동 중..." : "카카오로 계속하기"}
+            </button>
+            <button type="button" style={{ ...styles.snsBtn, ...styles.googleBtn }} disabled={!!busy} onClick={() => handle("google")}>
+              {busy === "google" ? "이동 중..." : "Google로 계속하기"}
+            </button>
+            <p style={styles.loginFinePrint}>처음이면 자동으로 가입됩니다.</p>
+          </>
+        ) : (
+          <p style={styles.loginFinePrint}>
+            로그인이 아직 설정되지 않았습니다. <code>docs/auth-setup.md</code> 를 참고해 Supabase 키를 등록해주세요.
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function CafeDetailModal({ cafe, onClose, onAddReview, isFavorite, isLoggedIn, onToggleFavorite, onRequireLogin }) {
   const openState = isOpenNow(cafe.hours, cafe.weeklyHours);
   const naverMapUrl = `https://map.naver.com/v5/?c=${cafe.lng},${cafe.lat},15,0,0,0,dh`;
   const reviewPhotoList = (cafe.reviews || []).flatMap((review) => review.images || []);
@@ -1256,6 +1444,15 @@ function CafeDetailModal({ cafe, onClose, onAddReview }) {
           </div>
           <button type="button" style={styles.detailCloseBtn} onClick={onClose} aria-label="상세 정보 닫기">×</button>
         </div>
+        <button
+          type="button"
+          style={{ ...styles.favoriteBtn, ...(isFavorite ? styles.favoriteBtnActive : {}) }}
+          onClick={() => (isLoggedIn ? onToggleFavorite(cafe.id) : onRequireLogin())}
+          aria-pressed={isFavorite}
+        >
+          <span style={styles.favoriteStar}>{isFavorite ? "★" : "☆"}</span>
+          {isFavorite ? "즐겨찾기 완료" : "즐겨찾기"}
+        </button>
         <p style={styles.detailAddress}>{cafe.dong} · {cafe.address}</p>
         <div style={styles.badgeRow}>
           {FILTERS.filter((filter) => cafe.tags[filter.key]).map(({ key, label, icon: Icon }) => (
@@ -2294,6 +2491,29 @@ const styles = {
   photoViewerCount: { position: "absolute", bottom: 18, left: 0, right: 0, color: "#FFFDF8", fontSize: 12, textAlign: "center" },
   modalOverlay: { position: "fixed", inset: 0, background: "rgba(38,36,31,0.5)", display: "flex", alignItems: "flex-end", justifyContent: "center", zIndex: 50, animation: "cf-fade-in 0.18s ease" },
   modal: { background: COLOR.surface, borderRadius: "18px 18px 0 0", padding: "22px 20px", maxWidth: 480, width: "100%", maxHeight: "88vh", overflowY: "auto", boxShadow: "0 -8px 26px rgba(38,36,31,0.18)", animation: "cf-sheet-up 0.22s ease" },
+
+  /* 로그인 팝업 */
+  loginModal: { position: "relative", background: COLOR.surface, borderRadius: "18px 18px 0 0", padding: "26px 22px 30px", maxWidth: 480, width: "100%", boxShadow: "0 -8px 26px rgba(38,36,31,0.18)", animation: "cf-sheet-up 0.22s ease" },
+  loginTitle: { margin: "0 0 6px", fontFamily: "'Noto Serif KR', serif", fontSize: 20, fontWeight: 700 },
+  loginDesc: { margin: "0 0 18px", fontSize: 13, color: COLOR.inkSoft, lineHeight: 1.5 },
+  snsBtn: { display: "flex", alignItems: "center", justifyContent: "center", width: "100%", minHeight: 48, marginTop: 10, border: "none", borderRadius: 10, fontSize: 14.5, fontWeight: 700, cursor: "pointer" },
+  kakaoBtn: { background: "#FEE500", color: "rgba(0,0,0,0.85)" },
+  googleBtn: { background: "#FFFFFF", color: "#1F1F1F", border: "1px solid #DADCE0" },
+  loginFinePrint: { margin: "14px 0 0", fontSize: 11.5, color: COLOR.inkSoft, textAlign: "center", lineHeight: 1.5 },
+
+  /* 상세보기 즐겨찾기 버튼 */
+  favoriteBtn: { display: "flex", alignItems: "center", justifyContent: "center", gap: 7, width: "100%", minHeight: 44, marginTop: 12, borderRadius: 10, border: `1px solid ${COLOR.accent}`, background: COLOR.surface, color: COLOR.accent, fontSize: 14, fontWeight: 700, cursor: "pointer" },
+  favoriteBtnActive: { background: COLOR.accent, color: "#FFFDF8" },
+  favoriteStar: { fontSize: 17, lineHeight: 1 },
+
+  /* 지도 우측 즐겨찾기 보기 토글 */
+  favoritesToggleBtn: { position: "absolute", right: 16, bottom: "calc(104px + env(safe-area-inset-bottom, 0px))", zIndex: 25, width: 78, height: 60, borderRadius: 16, border: "none", background: "#FFFFFF", color: COLOR.ink, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 2, cursor: "pointer", boxShadow: "0 6px 16px rgba(38,36,31,0.22)" },
+  favoritesToggleBtnActive: { background: COLOR.accent, color: "#FFFDF8" },
+  favoritesToggleStar: { fontSize: 20, lineHeight: 1 },
+  favoritesToggleLabel: { fontSize: 10.5, fontWeight: 700 },
+
+  /* 로그인 상태 표시 / 로그아웃 */
+  accountBtn: { position: "absolute", right: 16, bottom: "calc(172px + env(safe-area-inset-bottom, 0px))", zIndex: 25, width: 44, height: 44, borderRadius: 22, border: "2px solid #FFFFFF", background: COLOR.teal, color: "#FFFDF8", fontSize: 17, fontWeight: 700, cursor: "pointer", boxShadow: "0 4px 12px rgba(38,36,31,0.24)" },
   modalTitle: { margin: "0 0 6px", fontFamily: "'Noto Serif KR', serif", fontSize: 20, fontWeight: 700 },
   modalHint: { margin: "0 0 16px", fontSize: 12.5, color: COLOR.inkSoft, background: COLOR.tealSoft, padding: "8px 12px", borderRadius: 8 },
   formGrid: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 },

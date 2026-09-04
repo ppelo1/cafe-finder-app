@@ -33,6 +33,20 @@ create table if not exists reviews (
   created_at timestamptz not null default now()
 );
 
+-- 즐겨찾기: 로그인 사용자별로 자기 것만 저장/조회.
+-- 테스트 단계 동안 카페 목록은 아직 프론트엔드(localStorage)에 있으므로
+-- cafe_id 에는 cafes 테이블 외래키를 걸지 않는다. 카페를 DB로 옮긴 뒤 추가.
+create table if not exists favorites (
+  user_id uuid not null references auth.users(id) on delete cascade,
+  cafe_id bigint not null,
+  created_at timestamptz not null default now(),
+  primary key (user_id, cafe_id)
+);
+alter table favorites enable row level security;
+create policy "본인 즐겨찾기만 조회" on favorites for select using (auth.uid() = user_id);
+create policy "본인 즐겨찾기만 추가" on favorites for insert with check (auth.uid() = user_id);
+create policy "본인 즐겨찾기만 삭제" on favorites for delete using (auth.uid() = user_id);
+
 -- 행 단위 보안(RLS): 조회는 누구나 가능, 등록/리뷰 작성은 로그인한 사람만.
 alter table cafes enable row level security;
 alter table reviews enable row level security;
