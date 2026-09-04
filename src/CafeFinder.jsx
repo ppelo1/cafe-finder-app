@@ -713,9 +713,10 @@ function CafeFinderInner() {
 
   const requireLogin = () => setShowLogin(true);
 
-  // 로그인이 풀리면 즐겨찾기 전용 보기도 해제
+  // 로그인되면 로그인 팝업을 닫고, 로그아웃되면 즐겨찾기 전용 보기도 해제
   useEffect(() => {
-    if (!user) setFavoritesOnly(false);
+    if (user) setShowLogin(false);
+    else setFavoritesOnly(false);
   }, [user]);
 
   // 테스트 단계: DB/백엔드 없이 브라우저 localStorage에만 저장한다.
@@ -1234,11 +1235,13 @@ function LoginModal({ onClose, onSignIn, reason }) {
   const handle = async (provider) => {
     setBusy(provider);
     const { error } = (await onSignIn(provider)) || {};
+    setBusy(null);
     if (error) {
-      setBusy(null);
       alert(error.message || "로그인을 시작할 수 없습니다.");
+      return;
     }
-    // 성공 시 OAuth 페이지로 리다이렉트되므로 여기서 별도 처리 없음
+    // 실제 OAuth 는 페이지가 리다이렉트되고, 로컬 테스트 로그인은 바로 성공하므로 닫는다.
+    onClose();
   };
   return (
     <div style={styles.modalOverlay} onClick={onClose}>
