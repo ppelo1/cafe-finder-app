@@ -780,7 +780,7 @@ function CafeFinderInner() {
   const [favoritesOnly, setFavoritesOnly] = useState(false);
 
   const mapStatus = useNaverMapsScript(NAVER_CONFIG.clientId);
-  const { user, signIn, authError, clearAuthError } = useAuth();
+  const { user, signIn, signOut, authError, clearAuthError } = useAuth();
   const { favorites, toggleFavorite, updateMemo } = useFavorites(user);
 
   // 마커 라벨용: { [cafeId문자열]: 메모 } (메모 있는 즐겨찾기만)
@@ -1250,6 +1250,21 @@ function CafeFinderInner() {
             </button>
           </div>
         </div>
+
+        {mobileTab === "map" && user && (
+          <button
+            type="button"
+            style={styles.accountBtn}
+            onClick={() => {
+              const who = user.user_metadata?.name || user.email || "";
+              if (window.confirm(`${who ? who + " · " : ""}로그아웃 할까요?`)) signOut();
+            }}
+            aria-label="로그아웃"
+            title={user.email || user.user_metadata?.name || "로그인됨"}
+          >
+            {(user.user_metadata?.name || user.email || "?").trim().charAt(0).toUpperCase()}
+          </button>
+        )}
 
         {mobileTab === "map" && (
           <button
@@ -2735,6 +2750,9 @@ const styles = {
   favoriteMemoBox: { display: "flex", gap: 7, alignItems: "stretch", marginTop: 8 },
   favoriteMemoInput: { flex: 1, minHeight: 44, padding: "8px 10px", borderRadius: 9, border: `1px solid ${COLOR.border}`, background: "#FAF8F0", fontSize: 13, lineHeight: 1.4, fontFamily: "'Noto Sans KR', sans-serif", color: COLOR.ink, resize: "vertical" },
   favoriteMemoSaveBtn: { flexShrink: 0, minWidth: 68, border: "none", borderRadius: 9, background: COLOR.accent, color: "#FFFDF8", fontSize: 12.5, fontWeight: 700, cursor: "pointer" },
+
+  /* 로그인 상태 표시 / 탭하면 로그아웃 */
+  accountBtn: { position: "absolute", right: 16, bottom: "calc(172px + env(safe-area-inset-bottom, 0px))", zIndex: 26, width: 44, height: 44, borderRadius: 22, border: "2px solid #FFFFFF", background: COLOR.teal, color: "#FFFDF8", fontSize: 17, fontWeight: 700, cursor: "pointer", boxShadow: "0 4px 12px rgba(38,36,31,0.24)" },
 
   /* 지도 우측 즐겨찾기 보기 토글 */
   favoritesToggleBtn: { position: "absolute", right: 16, bottom: "calc(104px + env(safe-area-inset-bottom, 0px))", zIndex: 25, width: 78, height: 60, borderRadius: 16, border: "none", background: "#FFFFFF", color: COLOR.ink, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 2, cursor: "pointer", boxShadow: "0 6px 16px rgba(38,36,31,0.22)" },
