@@ -516,12 +516,12 @@ function useAuth() {
       return Promise.resolve({});
     }
     if (!supabase) return Promise.resolve({ error: new Error("로그인이 설정되지 않았습니다.") });
-    // 참고: Supabase(GoTrue)는 카카오에 account_email 을 항상 요청한다(프론트에서 못 뺌).
-    // 따라서 카카오 로그인은 앱을 "비즈앱"으로 전환하고 동의항목에서 이메일을 켜야 동작한다.
-    return supabase.auth.signInWithOAuth({
-      provider,
-      options: { redirectTo: window.location.origin + import.meta.env.BASE_URL },
-    });
+    const options = { redirectTo: window.location.origin + import.meta.env.BASE_URL };
+    // 카카오: GoTrue 기본 scope 에는 account_email 이 들어있는데, 그건 비즈앱이라야 열림.
+    // scope 를 raw 쿼리파라미터로 직접 넘기면 GoTrue 가 기본값을 덧붙이지 않고
+    // 그대로 통과시켜서, 닉네임 동의만으로 로그인된다. (options.scopes 는 병합돼서 안 됨)
+    if (provider === "kakao") options.queryParams = { scope: "profile_nickname" };
+    return supabase.auth.signInWithOAuth({ provider, options });
   }, []);
 
   const signOut = useCallback(async () => {

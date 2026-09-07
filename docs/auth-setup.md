@@ -59,18 +59,13 @@ VITE_DEV_LOGIN=true
    `https://<프로젝트ref>.supabase.co/auth/v1/callback`
    (`<프로젝트ref>` = `VITE_SUPABASE_URL` 의 서브도메인. Supabase Providers→Kakao 화면에도
    "Callback URL (for OAuth)" 로 그대로 적혀 있음)
-5. **비즈앱 전환이 필요합니다.** Supabase(GoTrue)는 카카오 로그인 시 항상
-   `account_email` 을 요청하는데, 이건 카카오 **비즈니스 앱**에서만 열립니다
-   (프론트 코드로 뺄 수 없음 — GoTrue 하드코딩).
-   - **앱 → 비즈니스 → "비즈니스 앱 전환"** : 개인 개발자는 카카오톡 채널만 연결하면 됨
-     (사업자등록번호 불필요)
-   - 전환 후 **카카오 로그인 → 동의항목** :
-     - `닉네임(profile_nickname)` = 필수 동의
-     - `프로필 사진(profile_image)` = 선택 동의
-     - `카카오계정(이메일)(account_email)` = 선택 동의
-     - 각 항목에 **수집 목적 한 줄** 적어야 저장됨
-   - 증상별 원인: `KOE205` / `Invalid scope: account_email` = 이 설정 안 됨.
-   - 비즈앱 전환 전이라면 **구글 로그인만** 먼저 쓰면 됨.
+5. **카카오 로그인 → 동의항목** : `닉네임(profile_nickname)` = **필수 동의**
+   (수집 목적 한 줄 적어야 저장됨). 이거 하나면 됩니다.
+   - 앱 코드가 `signInWithOAuth` 에 `queryParams: { scope: "profile_nickname" }` 로
+     넘겨서, GoTrue 가 기본으로 붙이는 `account_email` 을 우회한다.
+     → **이메일·비즈앱 전환 불필요.**
+   - `KOE205` / `Invalid scope: account_email` 가 떴었다면 이 우회가 반영 안 된
+     옛 빌드다. 재배포 후 시크릿 탭에서 확인.
 6. **Client Secret** (선택 - 건너뛰어도 대부분 동작):
    `카카오 로그인 → 일반` 또는 `고급` 하단의 Client Secret 섹션에서 코드 발급 + `사용함`.
    메뉴에서 안 보이면 `앱 설정 → 앱 키` 페이지 하단도 확인. 못 찾으면 비워둔 채 진행.
