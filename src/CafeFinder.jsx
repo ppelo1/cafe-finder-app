@@ -378,12 +378,12 @@ function pinImageIcon(naver, spec) {
 }
 
 /* 핀 바로 밑에 붙는 라벨 (별도 마커 - content 아이콘이라 잘리지 않음)
-   카페 이름 + (즐겨찾기 메모가 있으면) 그 아래 메모 한두 줄 */
+   카페 이름 + (즐겨찾기 메모가 있으면) 그 아래 메모 최대 3줄 */
 function labelIcon(naver, name, memo) {
   const halo = "0 0 3px #FFFDF8,0 0 3px #FFFDF8,0 1px 2px rgba(255,253,248,0.95)";
   const memoHtml = memo && memo.trim()
-    ? `<div style="margin-top:2px;max-width:150px;white-space:normal;` +
-      `display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;` +
+    ? `<div style="margin-top:2px;max-width:160px;white-space:normal;word-break:break-word;` +
+      `display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;` +
       `font:500 11px/1.25 'Noto Sans KR',sans-serif;color:#B5533C;text-shadow:${halo};">` +
       `${escapeHtml(memo.trim())}</div>`
     : "";
@@ -2418,22 +2418,33 @@ function MockMapView({ cafes, selected, hovered, favoriteMemos = {}, onSelect, o
                 {c.name}
               </text>
             )}
-            {favoriteMemos[String(c.id)] && (
-              <text
-                x="0"
-                y={(isSelected || isHovered ? 3.4 + 9 : 3.4 + 8)}
-                textAnchor="middle"
-                fontSize="2.2"
-                fontWeight="500"
-                fill="#B5533C"
-                stroke="#FFFDF8"
-                strokeWidth="0.8"
-                paintOrder="stroke"
-                fontFamily="'Noto Sans KR', sans-serif"
-              >
-                {favoriteMemos[String(c.id)].length > 18 ? favoriteMemos[String(c.id)].slice(0, 18) + "…" : favoriteMemos[String(c.id)]}
-              </text>
-            )}
+            {favoriteMemos[String(c.id)] && (() => {
+              const memo = favoriteMemos[String(c.id)];
+              const perLine = 14;
+              const lines = [];
+              for (let i = 0; i < memo.length && lines.length < 3; i += perLine) {
+                lines.push(memo.slice(i, i + perLine));
+              }
+              if (memo.length > perLine * 3) lines[2] = lines[2].slice(0, perLine - 1) + "…";
+              const baseY = (isSelected || isHovered ? 3.4 + 9 : 3.4 + 8);
+              return (
+                <text
+                  x="0"
+                  textAnchor="middle"
+                  fontSize="2.1"
+                  fontWeight="500"
+                  fill="#B5533C"
+                  stroke="#FFFDF8"
+                  strokeWidth="0.75"
+                  paintOrder="stroke"
+                  fontFamily="'Noto Sans KR', sans-serif"
+                >
+                  {lines.map((ln, i) => (
+                    <tspan key={i} x="0" y={baseY + i * 2.6}>{ln}</tspan>
+                  ))}
+                </text>
+              );
+            })()}
           </g>
         );
       })}
