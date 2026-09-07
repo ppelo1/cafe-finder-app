@@ -1334,19 +1334,20 @@ function CopyIcon({ size = 13 }) {
 }
 function NaverMapIcon({ size = 26 }) {
   return (
-    <svg width={size} height={(size * 38) / 30} viewBox="0 0 30 38" aria-hidden="true">
+    <svg width={size} height={size} viewBox="0 0 32 32" aria-hidden="true">
       <defs>
-        <linearGradient id="cf-naver-pin-grad" x1="15%" y1="0%" x2="85%" y2="100%">
+        <linearGradient id="cf-naver-badge-grad" x1="10%" y1="0%" x2="90%" y2="100%">
           <stop offset="0%" stopColor="#2E8EF5" />
           <stop offset="55%" stopColor="#17C39B" />
           <stop offset="100%" stopColor="#39D659" />
         </linearGradient>
       </defs>
+      <rect x="1" y="1" width="30" height="30" rx="9" fill="url(#cf-naver-badge-grad)" />
       <path
-        d="M15 1C7.8 1 2 6.8 2 14c0 9.6 11.3 21.6 12 22.3.5.5 1.2.5 1.8 0C16.6 35.6 28 23.6 28 14 28 6.8 22.2 1 15 1z"
-        fill="url(#cf-naver-pin-grad)"
+        d="M16 7c-3.6 0-6.5 2.8-6.5 6.3 0 4.4 5.4 9.6 6.1 10.2.2.2.5.2.7 0 .8-.6 6.1-5.8 6.1-10.2C22.5 9.8 19.6 7 16 7z"
+        fill="#fff"
       />
-      <text x="15" y="14.5" textAnchor="middle" dominantBaseline="central" fontFamily="Arial, Helvetica, sans-serif" fontWeight="800" fontSize="13" fill="#fff">N</text>
+      <circle cx="16" cy="13.4" r="2.3" fill="url(#cf-naver-badge-grad)" />
     </svg>
   );
 }
@@ -2758,10 +2759,10 @@ const styles = {
     boxShadow: "0 4px 14px rgba(38,36,31,0.3)",
     touchAction: "manipulation",
   },
-  detailAddressRow: { display: "flex", alignItems: "center", gap: 8, margin: "0 0 10px" },
+  detailAddressRow: { display: "flex", alignItems: "center", gap: 8, margin: "14px 0 12px" },
   detailAddress: { flex: 1, minWidth: 0, margin: 0, color: COLOR.inkSoft, fontSize: 13 },
-  naverMapChip: { flexShrink: 0, display: "inline-flex", alignItems: "center", gap: 4, padding: "5px 10px", borderRadius: 999, border: `1px solid ${COLOR.border}`, background: COLOR.surface, color: COLOR.ink, fontSize: 11, fontWeight: 700, textDecoration: "none", whiteSpace: "nowrap" },
-  addrCopyChip: { flexShrink: 0, display: "inline-flex", alignItems: "center", gap: 4, padding: "5px 10px", borderRadius: 999, border: `1px solid ${COLOR.border}`, background: COLOR.surface, color: COLOR.inkSoft, fontSize: 11, fontWeight: 700, whiteSpace: "nowrap", cursor: "pointer" },
+  naverMapChip: { flexShrink: 0, display: "inline-flex", alignItems: "center", gap: 5, padding: "6px 11px 6px 8px", borderRadius: 999, border: `1px solid ${COLOR.border}`, background: COLOR.surface, color: COLOR.ink, fontSize: 11, fontWeight: 700, textDecoration: "none", whiteSpace: "nowrap" },
+  addrCopyChip: { flexShrink: 0, display: "inline-flex", alignItems: "center", gap: 4, padding: "6px 11px", borderRadius: 999, border: `1px solid ${COLOR.border}`, background: COLOR.surface, color: COLOR.inkSoft, fontSize: 11, fontWeight: 700, whiteSpace: "nowrap", cursor: "pointer" },
   detailDescription: { margin: "8px 0 14px", color: "#514C40", fontSize: 13.5, lineHeight: 1.55 },
   detailInfoGrid: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 },
   infoCard: { display: "flex", flexDirection: "column", gap: 6, padding: "12px 14px", borderRadius: 12, border: `1px solid ${COLOR.borderSoft}`, background: COLOR.surface },
