@@ -516,10 +516,11 @@ function useAuth() {
       return Promise.resolve({});
     }
     if (!supabase) return Promise.resolve({ error: new Error("로그인이 설정되지 않았습니다.") });
-    return supabase.auth.signInWithOAuth({
-      provider,
-      options: { redirectTo: window.location.origin + import.meta.env.BASE_URL },
-    });
+    const options = { redirectTo: window.location.origin + import.meta.env.BASE_URL };
+    // 카카오 이메일(account_email)은 비즈앱 전환이 필요해 요청하지 않는다.
+    // 닉네임/프로필사진만 요청 (동의항목에서 이 둘만 켜두면 됨).
+    if (provider === "kakao") options.scopes = "profile_nickname profile_image";
+    return supabase.auth.signInWithOAuth({ provider, options });
   }, []);
 
   const signOut = useCallback(async () => {

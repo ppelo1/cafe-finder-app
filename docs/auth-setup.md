@@ -59,8 +59,12 @@ VITE_DEV_LOGIN=true
    `https://<프로젝트ref>.supabase.co/auth/v1/callback`
    (`<프로젝트ref>` = `VITE_SUPABASE_URL` 의 서브도메인. Supabase Providers→Kakao 화면에도
    "Callback URL (for OAuth)" 로 그대로 적혀 있음)
-5. **카카오 로그인 → 동의항목** : `닉네임` = 필수 동의, `카카오계정(이메일)` = 선택 동의
-   (이메일을 필수로 받으려면 비즈앱 전환 필요 → 테스트는 선택 동의로 충분)
+5. **카카오 로그인 → 동의항목** : `닉네임(profile_nickname)` = 필수 동의,
+   `프로필 사진(profile_image)` = 선택 동의. **각 항목에 수집 목적을 한 줄 적어야 저장됨.**
+   - 앱 코드는 이 둘만 요청한다(`scopes: "profile_nickname profile_image"`).
+   - `카카오계정(이메일)` 은 **"권한없음"** 으로 막혀 있음 = 비즈앱 전환해야 열림.
+     전환 안 할 거면 요청 안 하면 되고(현재 코드가 그럼), 요청 scope 에 없는데도
+     동의항목에 켜져 있으면 상관없음. **요청하는 항목이 동의항목에 없으면 KOE205 에러.**
 6. **Client Secret** (선택 - 건너뛰어도 대부분 동작):
    `카카오 로그인 → 일반` 또는 `고급` 하단의 Client Secret 섹션에서 코드 발급 + `사용함`.
    메뉴에서 안 보이면 `앱 설정 → 앱 키` 페이지 하단도 확인. 못 찾으면 비워둔 채 진행.
