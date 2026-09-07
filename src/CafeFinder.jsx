@@ -938,9 +938,9 @@ function CafeFinderInner() {
     return () => observer.disconnect();
   }, []);
 
-  // 마커/목록에서 선택하면 먼저 가벼운 팝업만 띄운다. 상세는 팝업의 "상세보기"로.
   const selectCafe = (id) => {
     setSelected(id);
+    setDetailCafeId(id);
   };
 
   const showCafeOnMap = (id) => {
@@ -1263,24 +1263,10 @@ function CafeFinderInner() {
         </button>
       </div>
 
-      {selectedCafe && !detailCafe && mobileTab === "map" && (
-        <MapCafePopup
-          cafe={selectedCafe}
-          isLoggedIn={!!user}
-          isFavorite={Number(selectedCafe.id) in favorites}
-          favoriteMemo={favorites[Number(selectedCafe.id)]?.memo || ""}
-          onToggleFavorite={toggleFavorite}
-          onUpdateMemo={updateMemo}
-          onRequireLogin={requireLogin}
-          onOpenDetail={() => setDetailCafeId(selectedCafe.id)}
-          onClose={() => setSelected(null)}
-        />
-      )}
-
       {detailCafe && (
         <CafeDetailModal
           cafe={detailCafe}
-          onClose={() => { setDetailCafeId(null); setSelected(null); }}
+          onClose={() => setDetailCafeId(null)}
           onAddReview={addReview}
           isLoggedIn={!!user}
           isFavorite={Number(detailCafe.id) in favorites}
@@ -1358,55 +1344,6 @@ function LoginModal({ onClose, onSignIn, reason, errorText }) {
           </p>
         )}
       </div>
-    </div>
-  );
-}
-
-/* ---------- 지도에서 마커 탭 시 뜨는 가벼운 팝업 (즐겨찾기 + 메모 + 상세보기) ---------- */
-function MapCafePopup({ cafe, isLoggedIn, isFavorite, favoriteMemo = "", onToggleFavorite, onUpdateMemo, onRequireLogin, onOpenDetail, onClose }) {
-  const [memoDraft, setMemoDraft] = useState(favoriteMemo);
-  useEffect(() => { setMemoDraft(favoriteMemo); }, [favoriteMemo, cafe.id]);
-  return (
-    <div style={styles.mapPopup} onClick={(e) => e.stopPropagation()}>
-      <div style={styles.mapPopupHeader}>
-        <div style={{ minWidth: 0 }}>
-          <h3 style={styles.mapPopupTitle}>{cafe.name}</h3>
-          <p style={styles.mapPopupSub}>{cafe.dong} · {cafe.address}</p>
-        </div>
-        <button type="button" style={styles.detailCloseBtn} onClick={onClose} aria-label="닫기">×</button>
-      </div>
-      <div style={styles.mapPopupActions}>
-        <button
-          type="button"
-          style={{ ...styles.favoriteBtn, marginTop: 0, flex: 1, width: "auto", ...(isFavorite ? styles.favoriteBtnActive : {}) }}
-          onClick={() => (isLoggedIn ? onToggleFavorite(cafe.id) : onRequireLogin())}
-          aria-pressed={isFavorite}
-        >
-          <span style={styles.favoriteStar}>{isFavorite ? "★" : "☆"}</span>
-          {isFavorite ? "즐겨찾기 완료" : "즐겨찾기"}
-        </button>
-        <button type="button" style={styles.mapPopupDetailBtn} onClick={onOpenDetail}>상세보기</button>
-      </div>
-      {isLoggedIn && isFavorite && (
-        <div style={styles.favoriteMemoBox}>
-          <textarea
-            style={styles.favoriteMemoInput}
-            value={memoDraft}
-            onChange={(event) => setMemoDraft(event.target.value)}
-            placeholder="메모 (예: 2층 콘센트 자리 많음)"
-            rows={2}
-            maxLength={200}
-          />
-          <button
-            type="button"
-            style={{ ...styles.favoriteMemoSaveBtn, opacity: memoDraft.trim() === favoriteMemo.trim() ? 0.45 : 1 }}
-            onClick={() => onUpdateMemo(cafe.id, memoDraft.trim())}
-            disabled={memoDraft.trim() === favoriteMemo.trim()}
-          >
-            메모 저장
-          </button>
-        </div>
-      )}
     </div>
   );
 }
@@ -2736,14 +2673,6 @@ const styles = {
   favoriteMemoBox: { display: "flex", gap: 7, alignItems: "stretch", marginTop: 8 },
   favoriteMemoInput: { flex: 1, minHeight: 44, padding: "8px 10px", borderRadius: 9, border: `1px solid ${COLOR.border}`, background: "#FAF8F0", fontSize: 13, lineHeight: 1.4, fontFamily: "'Noto Sans KR', sans-serif", color: COLOR.ink, resize: "vertical" },
   favoriteMemoSaveBtn: { flexShrink: 0, minWidth: 68, border: "none", borderRadius: 9, background: COLOR.accent, color: "#FFFDF8", fontSize: 12.5, fontWeight: 700, cursor: "pointer" },
-
-  /* 지도 마커 탭 팝업 */
-  mapPopup: { position: "absolute", left: 12, right: 12, bottom: "calc(180px + env(safe-area-inset-bottom, 0px))", zIndex: 30, background: COLOR.surface, borderRadius: 14, padding: "12px 14px 14px", boxShadow: "0 10px 30px rgba(38,36,31,0.28)", animation: "cf-sheet-up 0.18s ease" },
-  mapPopupHeader: { display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 },
-  mapPopupTitle: { margin: 0, fontFamily: "'Noto Serif KR', serif", fontSize: 17, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" },
-  mapPopupSub: { margin: "2px 0 0", fontSize: 12, color: COLOR.inkSoft, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" },
-  mapPopupActions: { display: "flex", gap: 8, marginTop: 10 },
-  mapPopupDetailBtn: { flexShrink: 0, minWidth: 82, minHeight: 44, border: `1px solid ${COLOR.border}`, borderRadius: 10, background: COLOR.surface, color: COLOR.ink, fontSize: 13, fontWeight: 700, cursor: "pointer" },
 
   /* 지도 우측 즐겨찾기 보기 토글 */
   favoritesToggleBtn: { position: "absolute", right: 16, bottom: "calc(104px + env(safe-area-inset-bottom, 0px))", zIndex: 25, width: 78, height: 60, borderRadius: 16, border: "none", background: "#FFFFFF", color: COLOR.ink, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 2, cursor: "pointer", boxShadow: "0 6px 16px rgba(38,36,31,0.22)" },
