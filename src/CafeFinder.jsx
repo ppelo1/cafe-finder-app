@@ -2233,18 +2233,24 @@ function NaverRealMap({ cafes, allCafes, selected, hovered, favoriteMemos = {}, 
         const position = new naver.maps.LatLng(c.lat, c.lng);
 
         // 카페 이름(+즐겨찾기 메모) 라벨 (핀 밑, 클릭 불가, 항상 표시)
-        const memo = favoriteMemos[idStr];
-        if (labelsRef.current[idStr]) {
-          labelsRef.current[idStr].setPosition(position);
-          labelsRef.current[idStr].setIcon(labelIcon(naver, c.name, memo));
+        // 이름/메모가 바뀌면 setIcon 대신 라벨 마커를 새로 만든다
+        // (네이버 HTML 마커는 setIcon 후 화면 갱신이 안 되는 경우가 있음).
+        const memo = favoriteMemos[idStr] || "";
+        const existing = labelsRef.current[idStr];
+        if (existing && existing._cfName === c.name && existing._cfMemo === memo) {
+          existing.setPosition(position);
         } else {
-          labelsRef.current[idStr] = new naver.maps.Marker({
+          try { existing?.setMap(null); } catch (e) { /* noop */ }
+          const label = new naver.maps.Marker({
             position,
             map,
             icon: labelIcon(naver, c.name, memo),
             clickable: false,
             zIndex: 1,
           });
+          label._cfName = c.name;
+          label._cfMemo = memo;
+          labelsRef.current[idStr] = label;
         }
 
         if (markersRef.current[idStr]) {
