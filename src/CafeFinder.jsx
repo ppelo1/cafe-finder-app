@@ -1332,6 +1332,31 @@ function CopyIcon({ size = 13 }) {
     </svg>
   );
 }
+function CheckIcon({ size = 13, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M4 12.5l5.5 5.5L20 6.5" />
+    </svg>
+  );
+}
+function MapPinOutlineIcon({ size = 14, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M12 21s7-6.7 7-12a7 7 0 10-14 0c0 5.3 7 12 7 12z" />
+      <circle cx="12" cy="9" r="2.3" />
+    </svg>
+  );
+}
+function StoreIcon({ size = 14, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M4 10l1-5h14l1 5" />
+      <path d="M4 10a2.2 2.2 0 004.3.7A2.2 2.2 0 0012.5 10a2.2 2.2 0 004.2.7A2.2 2.2 0 0020 10" />
+      <path d="M5 10.5V20h14v-9.5" />
+      <path d="M9.5 20v-5.5h5V20" />
+    </svg>
+  );
+}
 function NaverMapIcon({ size = 26 }) {
   return (
     <svg width={size} height={size} viewBox="0 0 32 32" aria-hidden="true">
@@ -1697,16 +1722,18 @@ function CafeDetailModal({ cafe, onClose, onAddReview, isFavorite, favoriteMemo 
           </div>
         )}
         <div style={styles.detailAddressRow}>
-          <p style={styles.detailAddress}>{cafe.dong} · {cafe.address}</p>
+          <p style={styles.detailAddress}>
+            <MapPinOutlineIcon size={15} color={COLOR.accent} />
+            {cafe.dong} · {cafe.address}
+          </p>
           <button
             type="button"
-            style={styles.addrCopyChip}
+            style={{ ...styles.addrCopyChip, ...(addrCopied ? styles.addrCopyChipDone : {}) }}
             onClick={copyAddress}
             aria-label="주소 복사"
             title="주소 복사"
           >
-            <CopyIcon size={13} />
-            {addrCopied ? "복사됨" : "복사"}
+            {addrCopied ? <CheckIcon size={16} color={COLOR.teal} /> : <CopyIcon size={16} />}
           </button>
           <a
             href={naverMapUrl}
@@ -1716,8 +1743,7 @@ function CafeDetailModal({ cafe, onClose, onAddReview, isFavorite, favoriteMemo 
             aria-label="네이버 지도에서 보기"
             title="네이버 지도에서 보기"
           >
-            <NaverMapIcon size={15} />
-            네이버지도
+            <NaverMapIcon size={40} />
           </a>
         </div>
         <div style={styles.badgeRow}>
@@ -1728,22 +1754,33 @@ function CafeDetailModal({ cafe, onClose, onAddReview, isFavorite, favoriteMemo 
         <p style={styles.detailDescription}>{cafe.desc || "등록된 소개가 없습니다."}</p>
         <div style={styles.detailInfoGrid}>
           <div style={styles.infoCard}>
-            <span style={styles.detailInfoLabel}><ClockIcon size={14} color={COLOR.inkSoft} />영업시간</span>
+            <span style={styles.detailInfoLabel}>
+              <span style={{ ...styles.infoIconBadge, background: COLOR.accentSoft }}><ClockIcon size={14} color={COLOR.accent} /></span>
+              영업시간
+            </span>
             <strong style={styles.infoCardValue}>{cafe.hours}</strong>
           </div>
           <div style={styles.infoCard}>
             <span style={styles.detailInfoLabel}>
-              <span style={{ ...styles.statusDot, background: openState === null ? COLOR.inkSoft : openState ? COLOR.teal : COLOR.accent }} />
+              <span style={{ ...styles.infoIconBadge, background: openState === null ? COLOR.borderSoft : openState ? COLOR.tealSoft : COLOR.accentSoft }}>
+                <StoreIcon size={14} color={openState === null ? COLOR.inkSoft : openState ? COLOR.teal : COLOR.accent} />
+              </span>
               상태
             </span>
             <strong style={{ ...styles.infoCardValue, ...(openState ? styles.openText : styles.closedText) }}>{openState === null ? "정보 없음" : openState ? "영업중" : "영업종료"}</strong>
           </div>
           <div style={styles.infoCard}>
-            <span style={styles.detailInfoLabel}><ChairIcon size={14} color={COLOR.inkSoft} />좌석</span>
+            <span style={styles.detailInfoLabel}>
+              <span style={{ ...styles.infoIconBadge, background: "#EFE6D3" }}><ChairIcon size={14} color="#8B6F47" /></span>
+              좌석
+            </span>
             <strong style={styles.infoCardValue}>{cafe.seats}석</strong>
           </div>
           <div style={styles.infoCard}>
-            <span style={styles.detailInfoLabel}><PhoneIcon size={14} color={COLOR.inkSoft} />전화번호</span>
+            <span style={styles.detailInfoLabel}>
+              <span style={{ ...styles.infoIconBadge, background: "rgba(38,36,31,0.08)" }}><PhoneIcon size={14} color={COLOR.inkSoft} /></span>
+              전화번호
+            </span>
             <strong style={styles.infoCardValue}>{cafe.phone || "등록된 번호 없음"}</strong>
           </div>
         </div>
@@ -2760,16 +2797,17 @@ const styles = {
     touchAction: "manipulation",
   },
   detailAddressRow: { display: "flex", alignItems: "center", gap: 8, margin: "14px 0 12px" },
-  detailAddress: { flex: 1, minWidth: 0, margin: 0, color: COLOR.inkSoft, fontSize: 13 },
-  naverMapChip: { flexShrink: 0, display: "inline-flex", alignItems: "center", gap: 5, padding: "6px 11px 6px 8px", borderRadius: 999, border: `1px solid ${COLOR.border}`, background: COLOR.surface, color: COLOR.ink, fontSize: 11, fontWeight: 700, textDecoration: "none", whiteSpace: "nowrap" },
-  addrCopyChip: { flexShrink: 0, display: "inline-flex", alignItems: "center", gap: 4, padding: "6px 11px", borderRadius: 999, border: `1px solid ${COLOR.border}`, background: COLOR.surface, color: COLOR.inkSoft, fontSize: 11, fontWeight: 700, whiteSpace: "nowrap", cursor: "pointer" },
+  detailAddress: { flex: 1, minWidth: 0, margin: 0, display: "flex", alignItems: "center", gap: 5, color: COLOR.inkSoft, fontSize: 13 },
+  naverMapChip: { flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", width: 40, height: 40, borderRadius: 12, textDecoration: "none", overflow: "hidden" },
+  addrCopyChip: { flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", width: 40, height: 40, borderRadius: 12, border: `1px solid ${COLOR.border}`, background: COLOR.surface, color: COLOR.ink, cursor: "pointer" },
+  addrCopyChipDone: { borderColor: COLOR.teal, background: COLOR.tealSoft },
   detailDescription: { margin: "8px 0 14px", color: "#514C40", fontSize: 13.5, lineHeight: 1.55 },
   detailInfoGrid: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 },
   infoCard: { display: "flex", flexDirection: "column", gap: 6, padding: "12px 14px", borderRadius: 12, border: `1px solid ${COLOR.borderSoft}`, background: COLOR.surface },
   infoCardValue: { fontSize: 15, fontWeight: 700, color: COLOR.ink },
-  statusDot: { width: 8, height: 8, borderRadius: 4, flexShrink: 0 },
+  infoIconBadge: { display: "flex", alignItems: "center", justifyContent: "center", width: 26, height: 26, borderRadius: 13, flexShrink: 0 },
   detailInfoGridItem: { padding: 10, background: COLOR.surface },
-  detailInfoLabel: { display: "flex", alignItems: "center", gap: 5, color: COLOR.inkSoft, fontSize: 11.5 },
+  detailInfoLabel: { display: "flex", alignItems: "center", gap: 7, color: COLOR.inkSoft, fontSize: 11.5 },
   reviewSection: { borderTop: `1px solid ${COLOR.border}`, paddingTop: 15 },
   detailTabs: { display: "flex", gap: 4, marginBottom: 15, borderBottom: `1px solid ${COLOR.border}` },
   detailTab: { flex: 1, minHeight: 44, padding: "0 8px", border: "none", borderBottom: "2px solid transparent", background: "transparent", color: COLOR.inkSoft, fontSize: 13, fontWeight: 600, cursor: "pointer", touchAction: "manipulation" },
