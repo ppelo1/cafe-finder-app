@@ -1334,10 +1334,19 @@ function CopyIcon({ size = 13 }) {
 }
 function NaverMapIcon({ size = 26 }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 40 40" aria-hidden="true">
-      <rect width="40" height="40" rx="10" fill="#03C75A" />
-      <path d="M20 8c-5 0-9 3.9-9 8.8 0 6.2 7.6 13.4 8.5 14.2.3.3.7.3 1 0 .9-.8 8.5-8 8.5-14.2C29 11.9 25 8 20 8z" fill="#fff" />
-      <circle cx="20" cy="16.6" r="3.4" fill="#03C75A" />
+    <svg width={size} height={(size * 38) / 30} viewBox="0 0 30 38" aria-hidden="true">
+      <defs>
+        <linearGradient id="cf-naver-pin-grad" x1="15%" y1="0%" x2="85%" y2="100%">
+          <stop offset="0%" stopColor="#2E8EF5" />
+          <stop offset="55%" stopColor="#17C39B" />
+          <stop offset="100%" stopColor="#39D659" />
+        </linearGradient>
+      </defs>
+      <path
+        d="M15 1C7.8 1 2 6.8 2 14c0 9.6 11.3 21.6 12 22.3.5.5 1.2.5 1.8 0C16.6 35.6 28 23.6 28 14 28 6.8 22.2 1 15 1z"
+        fill="url(#cf-naver-pin-grad)"
+      />
+      <text x="15" y="14.5" textAnchor="middle" dominantBaseline="central" fontFamily="Arial, Helvetica, sans-serif" fontWeight="800" fontSize="13" fill="#fff">N</text>
     </svg>
   );
 }
