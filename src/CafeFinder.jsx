@@ -579,20 +579,21 @@ function useFavorites(user) {
       return;
     }
     let active = true;
-    supabase
-      .from("favorites")
-      .select("cafe_id, memo")
-      .eq("user_id", user.id)
-      .then(({ data, error }) => {
-        if (!active) return;
-        if (error) {
-          console.warn("즐겨찾기 불러오기 실패:", error.message);
-          return;
-        }
-        const map = {};
-        (data || []).forEach((row) => { map[Number(row.cafe_id)] = { memo: row.memo || "" }; });
-        setFavorites(map);
-      });
+    (async () => {
+      // memo 컬럼이 아직 없는 프로젝트도 있어서, 실패하면 cafe_id 만으로 재조회
+      let { data, error } = await supabase.from("favorites").select("cafe_id, memo").eq("user_id", user.id);
+      if (error && /memo/i.test(error.message || "")) {
+        ({ data, error } = await supabase.from("favorites").select("cafe_id").eq("user_id", user.id));
+      }
+      if (!active) return;
+      if (error) {
+        console.warn("즐겨찾기 불러오기 실패:", error.message);
+        return;
+      }
+      const map = {};
+      (data || []).forEach((row) => { map[Number(row.cafe_id)] = { memo: row.memo || "" }; });
+      setFavorites(map);
+    })();
     return () => {
       active = false;
     };
@@ -614,9 +615,12 @@ function useFavorites(user) {
 
       if (useLocal) { persistLocal(next); return; }
       // memo 는 컬럼 기본값(''), insert 에 넣지 않아 컬럼 추가 전에도 동작한다.
+      // upsert + ignoreDuplicates: 이미 있는 행을 다시 추가해도 에러 안 남 (깜빡임 방지).
       const { error } = wasFavorite
         ? await supabase.from("favorites").delete().match({ user_id: user.id, cafe_id: id })
-        : await supabase.from("favorites").insert({ user_id: user.id, cafe_id: id });
+        : await supabase
+            .from("favorites")
+            .upsert({ user_id: user.id, cafe_id: id }, { onConflict: "user_id,cafe_id", ignoreDuplicates: true });
       if (error) {
         console.warn("즐겨찾기 저장 실패:", error.message);
         setFavorites(favorites); // 되돌리기
