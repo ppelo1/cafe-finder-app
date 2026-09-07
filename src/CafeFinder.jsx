@@ -655,6 +655,170 @@ function useFavorites(user) {
   return { favorites, toggleFavorite, updateMemo };
 }
 
+/* ---------- 카페 + 리뷰 (Supabase 공유 저장, 없으면 localStorage) ----------
+   - Supabase 로그인 상태: cafes/reviews 테이블 (조회는 누구나, 등록은 로그인)
+   - Supabase 미설정 / 로컬 테스트 로그인: localStorage (기기별)                 */
+const CAFE_SELECT = "id, name, dong, address, phone, naver_name, naver_link, tags, outlet_range, seats, rating, hours, weekly_hours, description, lat, lng, reviews(id, rating, text, images, created_at)";
+
+function rowToCafe(row) {
+  const reviews = (row.reviews || [])
+    .slice()
+    .sort((a, b) => b.id - a.id)
+    .map((r) => ({
+      id: r.id,
+      rating: r.rating || 0,
+      text: r.text || "",
+      images: Array.isArray(r.images) ? r.images : [],
+      createdAt: r.created_at ? new Date(`${r.created_at}Z`).toLocaleDateString("ko-KR") : "",
+    }));
+  return {
+    id: row.id,
+    name: row.name,
+    dong: row.dong || "",
+    address: row.address,
+    phone: row.phone || "",
+    naverName: row.naver_name || "",
+    naverLink: row.naver_link || "",
+    tags: row.tags || {},
+    outletRange: row.outlet_range || "none",
+    seats: row.seats || 0,
+    rating: row.rating || 0,
+    hours: row.hours || "정보 없음",
+    weeklyHours: row.weekly_hours || undefined,
+    desc: row.description || "",
+    lat: row.lat,
+    lng: row.lng,
+    reviews,
+  };
+}
+
+function useCafes(user) {
+  const [cafes, setCafes] = useState(INITIAL_CAFES);
+  const useLocal = !supabase || !!user?.isDev;
+
+  useEffect(() => {
+    if (useLocal) {
+      try {
+        const saved = JSON.parse(localStorage.getItem(CAFES_STORAGE_KEY) || "null");
+        if (Array.isArray(saved) && saved.length) setCafes(saved);
+      } catch (e) {
+        console.warn("저장된 카페를 불러오지 못했습니다.", e);
+      }
+      return;
+    }
+    let active = true;
+    supabase
+      .from("cafes")
+      .select(CAFE_SELECT)
+      .order("id", { ascending: false })
+      .then(({ data, error }) => {
+        if (!active) return;
+        if (error) {
+          console.warn("카페 목록 불러오기 실패:", error.message);
+          return;
+        }
+        setCafes((data || []).map(rowToCafe));
+      });
+    return () => {
+      active = false;
+    };
+  }, [useLocal]);
+
+  useEffect(() => {
+    if (!useLocal) return;
+    try {
+      localStorage.setItem(CAFES_STORAGE_KEY, JSON.stringify(cafes));
+    } catch (e) {
+      console.warn("카페를 저장하지 못했습니다.", e);
+    }
+  }, [cafes, useLocal]);
+
+  const addCafe = useCallback(
+    async (cafe) => {
+      if (useLocal || !user || user.isDev) {
+        const local = { ...cafe, id: cafe.id ?? Date.now(), reviews: [] };
+        setCafes((prev) => [local, ...prev]);
+        return local;
+      }
+      const { data, error } = await supabase
+        .from("cafes")
+        .insert({
+          name: cafe.name,
+          dong: cafe.dong || "",
+          address: cafe.address,
+          phone: cafe.phone || "",
+          naver_name: cafe.naverName || "",
+          naver_link: cafe.naverLink || "",
+          tags: cafe.tags || {},
+          outlet_range: cafe.outletRange || "none",
+          seats: Number(cafe.seats) || 0,
+          hours: cafe.hours || "정보 없음",
+          weekly_hours: cafe.weeklyHours || null,
+          description: cafe.desc || "",
+          lat: cafe.lat,
+          lng: cafe.lng,
+          created_by: user.id,
+        })
+        .select(CAFE_SELECT)
+        .single();
+      if (error) {
+        console.warn("카페 등록 실패:", error.message);
+        throw error;
+      }
+      const saved = rowToCafe(data);
+      setCafes((prev) => [saved, ...prev]);
+      return saved;
+    },
+    [useLocal, user]
+  );
+
+  const addReview = useCallback(
+    async (cafeId, review) => {
+      const nest = (saved) =>
+        setCafes((prev) => prev.map((c) => (c.id === cafeId ? { ...c, reviews: [saved, ...(c.reviews || [])] } : c)));
+
+      if (useLocal || !user || user.isDev) {
+        const local = {
+          id: review.id ?? Date.now(),
+          rating: Number(review.rating) || 0,
+          text: (review.text || "").trim(),
+          images: review.images || [],
+          createdAt: review.createdAt || new Date().toLocaleDateString("ko-KR"),
+        };
+        nest(local);
+        return local;
+      }
+      const { data, error } = await supabase
+        .from("reviews")
+        .insert({
+          cafe_id: cafeId,
+          rating: Number(review.rating) || 0,
+          text: (review.text || "").trim(),
+          images: review.images || [],
+          created_by: user.id,
+        })
+        .select("id, rating, text, images, created_at")
+        .single();
+      if (error) {
+        console.warn("리뷰 저장 실패:", error.message);
+        throw error;
+      }
+      const saved = {
+        id: data.id,
+        rating: data.rating || 0,
+        text: data.text || "",
+        images: Array.isArray(data.images) ? data.images : [],
+        createdAt: data.created_at ? new Date(`${data.created_at}Z`).toLocaleDateString("ko-KR") : new Date().toLocaleDateString("ko-KR"),
+      };
+      nest(saved);
+      return saved;
+    },
+    [useLocal, user]
+  );
+
+  return { cafes, addCafe, addReview };
+}
+
 /* 네이버 지오코딩 - 주소 문자열을 좌표로 변환 (submodules=geocoder 필요) */
 function geocodeAddressResults(query, callback) {
   if (!window.naver || !window.naver.maps || !window.naver.maps.Service) {
@@ -754,7 +918,6 @@ class ErrorBoundary extends React.Component {
 
 /* ---------- 메인 컴포넌트 ---------- */
 function CafeFinderInner() {
-  const [cafes, setCafes] = useState(INITIAL_CAFES);
   const [active, setActive] = useState(new Set());
   const [selected, setSelected] = useState(null);
   const [detailCafeId, setDetailCafeId] = useState(null);
@@ -782,6 +945,7 @@ function CafeFinderInner() {
   const mapStatus = useNaverMapsScript(NAVER_CONFIG.clientId);
   const { user, signIn, signOut, authError, clearAuthError } = useAuth();
   const { favorites, toggleFavorite, updateMemo } = useFavorites(user);
+  const { cafes, addCafe, addReview: addReviewToStore } = useCafes(user);
 
   // 마커 라벨용: { [cafeId문자열]: 메모 } (메모 있는 즐겨찾기만)
   const favoriteMemos = useMemo(() => {
@@ -803,24 +967,6 @@ function CafeFinderInner() {
     else setFavoritesOnly(false);
   }, [user]);
 
-  // 테스트 단계: DB/백엔드 없이 브라우저 localStorage에만 저장한다.
-  // 백엔드 구성 후에는 이 블록을 /api 호출로 교체하면 된다.
-  useEffect(() => {
-    try {
-      const saved = JSON.parse(localStorage.getItem(CAFES_STORAGE_KEY) || "null");
-      if (Array.isArray(saved) && saved.length) setCafes(saved);
-    } catch (error) {
-      console.warn("저장된 카페를 불러오지 못했습니다.", error);
-    }
-  }, []);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(CAFES_STORAGE_KEY, JSON.stringify(cafes));
-    } catch (error) {
-      console.warn("카페를 저장하지 못했습니다.", error);
-    }
-  }, [cafes]);
 
   const toggleFilter = (key) => {
     setActive((prev) => {
@@ -964,9 +1110,9 @@ function CafeFinderInner() {
   }, []);
 
   const submitCafe = async (data) => {
+    if (!user) { requireLogin(); return; }
     const loc = pickedLoc || { lat: 37.5535, lng: 126.914 }; // 위치 미지정 시 동네 중앙 기본값
-    const newCafe = {
-      id: Date.now(),
+    const draft = {
       name: data.name,
       dong: data.dong || inferDong(data.address),
       address: data.address,
@@ -976,31 +1122,26 @@ function CafeFinderInner() {
       naverLink: data.naverLink,
       phone: data.phone,
       seats: Number(data.seats) || 0,
-      rating: 0,
       hours: weeklyHoursSummary(data.weeklyHours) || "정보 없음",
       weeklyHours: data.weeklyHours,
       desc: data.desc,
       lat: loc.lat,
       lng: loc.lng,
     };
-    // 테스트 단계: state에만 추가하면 localStorage 저장 effect가 이어서 처리한다.
-    setCafes((prev) => [newCafe, ...prev]);
-    selectCafe(newCafe.id);
+    try {
+      const saved = await addCafe(draft);
+      selectCafe(saved.id);
+    } catch (e) {
+      alert("카페 등록에 실패했어요. 잠시 후 다시 시도해주세요.");
+      return;
+    }
     setShowForm(false);
     setPickedLoc(null);
   };
 
   const addReview = async (cafeId, review) => {
-    const savedReview = {
-      id: review.id ?? Date.now(),
-      rating: Number(review.rating) || 0,
-      text: (review.text || "").trim(),
-      images: review.images || [],
-      createdAt: review.createdAt || new Date().toLocaleDateString("ko-KR"),
-    };
-    setCafes((prev) => prev.map((cafe) => cafe.id === cafeId
-      ? { ...cafe, reviews: [savedReview, ...(cafe.reviews || [])] }
-      : cafe));
+    if (!user) { requireLogin(); throw new Error("로그인이 필요합니다."); }
+    return addReviewToStore(cafeId, review);
   };
 
   const selectedCafe = cafes.find((c) => c.id === selected) || null;
@@ -1282,7 +1423,7 @@ function CafeFinderInner() {
           </button>
         )}
 
-        <button style={styles.addBtnFloating} onClick={() => { setPickedLoc(null); setShowForm(true); }}>
+        <button style={styles.addBtnFloating} onClick={() => { if (!user) { requireLogin(); return; } setPickedLoc(null); setShowForm(true); }}>
           <img src={registerIconImg} alt="" aria-hidden="true" style={styles.addBtnIcon} />
           <span style={styles.addBtnLabel}>카페 등록</span>
         </button>
@@ -1520,6 +1661,11 @@ function CafeDetailModal({ cafe, onClose, onAddReview, isFavorite, favoriteMemo 
   const [reviewImages, setReviewImages] = useState([]);
   const [showReviewComposer, setShowReviewComposer] = useState(false);
   const [composerMode, setComposerMode] = useState("review");
+  const openComposer = (mode) => {
+    if (!isLoggedIn) { onRequireLogin(); return; }
+    setComposerMode(mode);
+    setShowReviewComposer(true);
+  };
   const [detailTab, setDetailTab] = useState("photos");
   const [selectedPhotoIndex, setSelectedPhotoIndex] = useState(null);
   const [submittingReview, setSubmittingReview] = useState(false);
@@ -1797,7 +1943,7 @@ function CafeDetailModal({ cafe, onClose, onAddReview, isFavorite, favoriteMemo 
             <div>
               <div style={styles.reviewSectionHeader}>
                 <h3 style={styles.reviewTitle}>리뷰</h3>
-                <button type="button" style={styles.writeReviewBtn} onClick={() => { setComposerMode("review"); setShowReviewComposer(true); }}>리뷰 남기기</button>
+                <button type="button" style={styles.writeReviewBtn} onClick={() => openComposer("review")}>리뷰 남기기</button>
               </div>
               {(cafe.reviews || []).length === 0 && <p style={styles.emptyPhotoText}>아직 리뷰가 없습니다.</p>}
               {(cafe.reviews || []).map((review) => (
@@ -1812,7 +1958,7 @@ function CafeDetailModal({ cafe, onClose, onAddReview, isFavorite, favoriteMemo 
             <div style={styles.photoGallerySection}>
               <div style={styles.photoGalleryHeader}>
                 <h3 style={styles.reviewTitle}>사진</h3>
-                <button type="button" style={styles.addPhotoBtn} onClick={() => { setComposerMode("photo"); setShowReviewComposer(true); }} aria-label="사진 추가">+</button>
+                <button type="button" style={styles.addPhotoBtn} onClick={() => openComposer("photo")} aria-label="사진 추가">+</button>
               </div>
               {reviewPhotoList.length > 0 ? (
                 <div style={styles.photoGallery}>{reviewPhotoList.map((image, index) => <button type="button" key={`${image}-${index}`} style={styles.galleryImageButton} onClick={() => setSelectedPhotoIndex(index)}><img src={image} alt={`카페 리뷰 사진 ${index + 1}`} style={styles.galleryImage} /></button>)}</div>
@@ -1820,7 +1966,7 @@ function CafeDetailModal({ cafe, onClose, onAddReview, isFavorite, favoriteMemo 
                 <div style={styles.emptyPhotoState}>
                   <PhotoPlaceholderIcon size={40} color={COLOR.border} />
                   <p style={styles.emptyPhotoText}>아직 등록된 사진이 없습니다.</p>
-                  <button type="button" style={styles.centerUploadBtn} onClick={() => { setComposerMode("photo"); setShowReviewComposer(true); }}>
+                  <button type="button" style={styles.centerUploadBtn} onClick={() => openComposer("photo")}>
                     <span style={styles.uploadPlus}>+</span>
                     이미지 업로드
                   </button>
