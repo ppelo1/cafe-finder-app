@@ -1662,7 +1662,20 @@ function CafeDetailModal({ cafe, onClose, onAddReview, isFavorite, favoriteMemo 
             </button>
           </div>
         )}
-        <p style={styles.detailAddress}>{cafe.dong} · {cafe.address}</p>
+        <div style={styles.detailAddressRow}>
+          <p style={styles.detailAddress}>{cafe.dong} · {cafe.address}</p>
+          <a
+            href={naverMapUrl}
+            target="_blank"
+            rel="noreferrer"
+            style={styles.naverMapChip}
+            aria-label="네이버 지도에서 보기"
+            title="네이버 지도에서 보기"
+          >
+            <NaverMapIcon size={15} />
+            네이버지도
+          </a>
+        </div>
         <div style={styles.badgeRow}>
           {FILTERS.filter((filter) => cafe.tags[filter.key]).map(({ key, label, icon: Icon }) => (
         <span key={key} style={styles.badge}><Icon size={12} color="#3D6B5F" />{key === "outlet" ? outletRangeLabel(cafe) : label}</span>
@@ -1690,16 +1703,6 @@ function CafeDetailModal({ cafe, onClose, onAddReview, isFavorite, favoriteMemo 
             <strong style={styles.infoCardValue}>{cafe.phone || "등록된 번호 없음"}</strong>
           </div>
         </div>
-        <a
-          href={naverMapUrl}
-          target="_blank"
-          rel="noreferrer"
-          style={styles.naverMapBtn}
-          aria-label="네이버 지도에서 보기"
-          title="네이버 지도에서 보기"
-        >
-          <NaverMapIcon size={26} />
-        </a>
         <section style={styles.reviewSection}>
           <div style={styles.detailTabs} role="tablist" aria-label="카페 상세 정보 탭">
             <button type="button" role="tab" aria-selected={detailTab === "photos"} style={{ ...styles.detailTab, ...(detailTab === "photos" ? styles.detailTabActive : {}) }} onClick={() => setDetailTab("photos")}>
@@ -2712,7 +2715,9 @@ const styles = {
     boxShadow: "0 4px 14px rgba(38,36,31,0.3)",
     touchAction: "manipulation",
   },
-  detailAddress: { margin: "0 0 10px", color: COLOR.inkSoft, fontSize: 13 },
+  detailAddressRow: { display: "flex", alignItems: "center", gap: 8, margin: "0 0 10px" },
+  detailAddress: { flex: 1, minWidth: 0, margin: 0, color: COLOR.inkSoft, fontSize: 13 },
+  naverMapChip: { flexShrink: 0, display: "inline-flex", alignItems: "center", gap: 4, padding: "5px 10px", borderRadius: 999, border: `1px solid ${COLOR.border}`, background: COLOR.surface, color: COLOR.ink, fontSize: 11, fontWeight: 700, textDecoration: "none", whiteSpace: "nowrap" },
   detailDescription: { margin: "8px 0 14px", color: "#514C40", fontSize: 13.5, lineHeight: 1.55 },
   detailInfoGrid: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 },
   infoCard: { display: "flex", flexDirection: "column", gap: 6, padding: "12px 14px", borderRadius: 12, border: `1px solid ${COLOR.borderSoft}`, background: COLOR.surface },
@@ -2720,7 +2725,6 @@ const styles = {
   statusDot: { width: 8, height: 8, borderRadius: 4, flexShrink: 0 },
   detailInfoGridItem: { padding: 10, background: COLOR.surface },
   detailInfoLabel: { display: "flex", alignItems: "center", gap: 5, color: COLOR.inkSoft, fontSize: 11.5 },
-  naverMapBtn: { display: "flex", alignItems: "center", justifyContent: "center", width: 42, height: 42, marginLeft: "auto", marginBottom: 16, borderRadius: 12, border: `1px solid ${COLOR.border}`, background: COLOR.surface },
   reviewSection: { borderTop: `1px solid ${COLOR.border}`, paddingTop: 15 },
   detailTabs: { display: "flex", gap: 4, marginBottom: 15, borderBottom: `1px solid ${COLOR.border}` },
   detailTab: { flex: 1, minHeight: 44, padding: "0 8px", border: "none", borderBottom: "2px solid transparent", background: "transparent", color: COLOR.inkSoft, fontSize: 13, fontWeight: 600, cursor: "pointer", touchAction: "manipulation" },
