@@ -39,12 +39,17 @@ create table if not exists reviews (
 create table if not exists favorites (
   user_id uuid not null references auth.users(id) on delete cascade,
   cafe_id bigint not null,
+  memo text not null default '',
   created_at timestamptz not null default now(),
   primary key (user_id, cafe_id)
 );
+-- 이미 favorites 테이블이 있던 프로젝트는 아래 한 줄만 SQL Editor 에서 실행:
+alter table favorites add column if not exists memo text not null default '';
+
 alter table favorites enable row level security;
 create policy "본인 즐겨찾기만 조회" on favorites for select using (auth.uid() = user_id);
 create policy "본인 즐겨찾기만 추가" on favorites for insert with check (auth.uid() = user_id);
+create policy "본인 즐겨찾기만 수정" on favorites for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
 create policy "본인 즐겨찾기만 삭제" on favorites for delete using (auth.uid() = user_id);
 
 -- 행 단위 보안(RLS): 조회는 누구나 가능, 등록/리뷰 작성은 로그인한 사람만.

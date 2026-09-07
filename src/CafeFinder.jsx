@@ -377,14 +377,23 @@ function pinImageIcon(naver, spec) {
   };
 }
 
-/* 핀 바로 밑에 붙는 카페 이름 라벨 (별도 마커 - content 아이콘이라 잘리지 않음) */
-function labelIcon(naver, name) {
+/* 핀 바로 밑에 붙는 라벨 (별도 마커 - content 아이콘이라 잘리지 않음)
+   카페 이름 + (즐겨찾기 메모가 있으면) 그 아래 메모 한두 줄 */
+function labelIcon(naver, name, memo) {
+  const halo = "0 0 3px #FFFDF8,0 0 3px #FFFDF8,0 1px 2px rgba(255,253,248,0.95)";
+  const memoHtml = memo && memo.trim()
+    ? `<div style="margin-top:2px;max-width:150px;white-space:normal;` +
+      `display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;` +
+      `font:500 11px/1.25 'Noto Sans KR',sans-serif;color:#B5533C;text-shadow:${halo};">` +
+      `${escapeHtml(memo.trim())}</div>`
+    : "";
   return {
     content:
-      `<div style="display:inline-block;transform:translateX(-50%);white-space:nowrap;` +
-      `font:600 12px/1.15 'Noto Sans KR',-apple-system,BlinkMacSystemFont,sans-serif;` +
-      `color:#26241F;text-shadow:0 0 3px #FFFDF8,0 0 3px #FFFDF8,0 1px 2px rgba(255,253,248,0.95);">` +
-      `${escapeHtml(name)}</div>`,
+      `<div style="display:inline-block;transform:translateX(-50%);text-align:center;">` +
+      `<div style="white-space:nowrap;font:600 12px/1.15 'Noto Sans KR',-apple-system,BlinkMacSystemFont,sans-serif;` +
+      `color:#26241F;text-shadow:${halo};">${escapeHtml(name)}</div>` +
+      memoHtml +
+      `</div>`,
     anchor: new naver.maps.Point(0, -6),
   };
 }
@@ -534,32 +543,45 @@ function useAuth() {
   return { user, authReady, signIn, signOut, authError, clearAuthError: () => setAuthError(null) };
 }
 
-/* ---------- 즐겨찾기 (로그인 계정에 저장) ----------
+/* 옛 저장 포맷([id,id,...] 또는 {id:"메모"}) 을 {id:{memo}} 로 정규화 */
+function normalizeFavorites(raw) {
+  const out = {};
+  if (Array.isArray(raw)) {
+    raw.forEach((id) => { out[Number(id)] = { memo: "" }; });
+  } else if (raw && typeof raw === "object") {
+    Object.entries(raw).forEach(([id, v]) => {
+      out[Number(id)] = { memo: typeof v === "string" ? v : (v && v.memo) || "" };
+    });
+  }
+  return out;
+}
+
+/* ---------- 즐겨찾기 (로그인 계정에 저장, 메모 포함) ----------
    - 로컬 테스트 로그인이거나 Supabase 미설정: 계정 id별로 localStorage 에 저장
-   - Supabase 로그인: favorites 테이블에 저장 (RLS: 본인 것만)                */
+   - Supabase 로그인: favorites 테이블에 저장 (RLS: 본인 것만)
+   favorites 형태: { [cafeId:number]: { memo: string } }                     */
 function useFavorites(user) {
-  const [favoriteIds, setFavoriteIds] = useState(() => new Set());
+  const [favorites, setFavorites] = useState(() => ({}));
   const useLocal = !supabase || !!user?.isDev;
   const localKey = user ? `cafe-finder:favorites:${user.id}` : null;
 
   useEffect(() => {
     if (!user) {
-      setFavoriteIds(new Set());
+      setFavorites({});
       return;
     }
     if (useLocal) {
       try {
-        const saved = JSON.parse(localStorage.getItem(localKey) || "[]");
-        setFavoriteIds(new Set((saved || []).map(Number)));
+        setFavorites(normalizeFavorites(JSON.parse(localStorage.getItem(localKey) || "null")));
       } catch (e) {
-        setFavoriteIds(new Set());
+        setFavorites({});
       }
       return;
     }
     let active = true;
     supabase
       .from("favorites")
-      .select("cafe_id")
+      .select("cafe_id, memo")
       .eq("user_id", user.id)
       .then(({ data, error }) => {
         if (!active) return;
@@ -567,42 +589,59 @@ function useFavorites(user) {
           console.warn("즐겨찾기 불러오기 실패:", error.message);
           return;
         }
-        setFavoriteIds(new Set((data || []).map((row) => Number(row.cafe_id))));
+        const map = {};
+        (data || []).forEach((row) => { map[Number(row.cafe_id)] = { memo: row.memo || "" }; });
+        setFavorites(map);
       });
     return () => {
       active = false;
     };
   }, [user, useLocal, localKey]);
 
+  const persistLocal = (next) => {
+    try { localStorage.setItem(localKey, JSON.stringify(next)); } catch (e) { /* noop */ }
+  };
+
   const toggleFavorite = useCallback(
     async (cafeId) => {
       if (!user) return;
       const id = Number(cafeId);
-      const wasFavorite = favoriteIds.has(id);
-      const next = new Set(favoriteIds);
-      wasFavorite ? next.delete(id) : next.add(id);
-      setFavoriteIds(next);
+      const wasFavorite = id in favorites;
+      const next = { ...favorites };
+      if (wasFavorite) delete next[id];
+      else next[id] = { memo: "" };
+      setFavorites(next);
 
-      if (useLocal) {
-        try { localStorage.setItem(localKey, JSON.stringify([...next])); } catch (e) { /* noop */ }
-        return;
-      }
+      if (useLocal) { persistLocal(next); return; }
       const { error } = wasFavorite
         ? await supabase.from("favorites").delete().match({ user_id: user.id, cafe_id: id })
-        : await supabase.from("favorites").insert({ user_id: user.id, cafe_id: id });
+        : await supabase.from("favorites").insert({ user_id: user.id, cafe_id: id, memo: "" });
       if (error) {
         console.warn("즐겨찾기 저장 실패:", error.message);
-        setFavoriteIds((prev) => {
-          const rb = new Set(prev);
-          wasFavorite ? rb.add(id) : rb.delete(id);
-          return rb;
-        });
+        setFavorites(favorites); // 되돌리기
       }
     },
-    [user, favoriteIds, useLocal, localKey]
+    [user, favorites, useLocal, localKey]
   );
 
-  return { favoriteIds, toggleFavorite };
+  const updateMemo = useCallback(
+    async (cafeId, memo) => {
+      if (!user) return;
+      const id = Number(cafeId);
+      if (!(id in favorites)) return;
+      const next = { ...favorites, [id]: { memo } };
+      setFavorites(next);
+      if (useLocal) { persistLocal(next); return; }
+      const { error } = await supabase
+        .from("favorites")
+        .update({ memo })
+        .match({ user_id: user.id, cafe_id: id });
+      if (error) console.warn("메모 저장 실패:", error.message);
+    },
+    [user, favorites, useLocal, localKey]
+  );
+
+  return { favorites, toggleFavorite, updateMemo };
 }
 
 /* 네이버 지오코딩 - 주소 문자열을 좌표로 변환 (submodules=geocoder 필요) */
@@ -731,7 +770,14 @@ function CafeFinderInner() {
 
   const mapStatus = useNaverMapsScript(NAVER_CONFIG.clientId);
   const { user, signIn, authError, clearAuthError } = useAuth();
-  const { favoriteIds, toggleFavorite } = useFavorites(user);
+  const { favorites, toggleFavorite, updateMemo } = useFavorites(user);
+
+  // 마커 라벨용: { [cafeId문자열]: 메모 } (메모 있는 즐겨찾기만)
+  const favoriteMemos = useMemo(() => {
+    const out = {};
+    Object.entries(favorites).forEach(([id, v]) => { if (v.memo) out[id] = v.memo; });
+    return out;
+  }, [favorites]);
 
   const requireLogin = () => setShowLogin(true);
 
@@ -828,10 +874,10 @@ function CafeFinderInner() {
       );
     }
     if (favoritesOnly) {
-      list = list.filter((c) => favoriteIds.has(Number(c.id)));
+      list = list.filter((c) => Number(c.id) in favorites);
     }
     return list;
-  }, [active, cafes, query, openNowOnly, outletRangeFilter, favoritesOnly, favoriteIds]);
+  }, [active, cafes, query, openNowOnly, outletRangeFilter, favoritesOnly, favorites]);
 
   const mapCafes = useMemo(() => {
     // 즐겨찾기 보기일 땐 흩어져 있어도 다 보이도록 뷰포트 필터를 건너뛴다.
@@ -1011,6 +1057,7 @@ function CafeFinderInner() {
               allCafes={filtered}
               selected={selected}
               hovered={hovered}
+              favoriteMemos={favoriteMemos}
               onSelect={selectCafe}
               onHover={setHovered}
               pickMode={showForm}
@@ -1023,6 +1070,7 @@ function CafeFinderInner() {
               cafes={mapCafes}
               selected={selected}
               hovered={hovered}
+              favoriteMemos={favoriteMemos}
               onSelect={selectCafe}
               onHover={setHovered}
               pickMode={showForm}
@@ -1220,8 +1268,10 @@ function CafeFinderInner() {
           onClose={() => setDetailCafeId(null)}
           onAddReview={addReview}
           isLoggedIn={!!user}
-          isFavorite={favoriteIds.has(Number(detailCafe.id))}
+          isFavorite={Number(detailCafe.id) in favorites}
+          favoriteMemo={favorites[Number(detailCafe.id)]?.memo || ""}
           onToggleFavorite={toggleFavorite}
+          onUpdateMemo={updateMemo}
           onRequireLogin={requireLogin}
         />
       )}
@@ -1297,8 +1347,10 @@ function LoginModal({ onClose, onSignIn, reason, errorText }) {
   );
 }
 
-function CafeDetailModal({ cafe, onClose, onAddReview, isFavorite, isLoggedIn, onToggleFavorite, onRequireLogin }) {
+function CafeDetailModal({ cafe, onClose, onAddReview, isFavorite, favoriteMemo = "", isLoggedIn, onToggleFavorite, onUpdateMemo, onRequireLogin }) {
   const openState = isOpenNow(cafe.hours, cafe.weeklyHours);
+  const [memoDraft, setMemoDraft] = useState(favoriteMemo);
+  useEffect(() => { setMemoDraft(favoriteMemo); }, [favoriteMemo, cafe.id]);
   const naverMapUrl = `https://map.naver.com/v5/?c=${cafe.lng},${cafe.lat},15,0,0,0,dh`;
   const reviewPhotoList = (cafe.reviews || []).flatMap((review) => review.images || []);
   const detailModalRef = useRef(null);
@@ -1526,6 +1578,26 @@ function CafeDetailModal({ cafe, onClose, onAddReview, isFavorite, isLoggedIn, o
           <span style={styles.favoriteStar}>{isFavorite ? "★" : "☆"}</span>
           {isFavorite ? "즐겨찾기 완료" : "즐겨찾기"}
         </button>
+        {isLoggedIn && isFavorite && (
+          <div style={styles.favoriteMemoBox}>
+            <textarea
+              style={styles.favoriteMemoInput}
+              value={memoDraft}
+              onChange={(event) => setMemoDraft(event.target.value)}
+              placeholder="메모 (예: 2층 콘센트 자리 많음, 오후엔 붐빔)"
+              rows={2}
+              maxLength={200}
+            />
+            <button
+              type="button"
+              style={{ ...styles.favoriteMemoSaveBtn, opacity: memoDraft.trim() === favoriteMemo.trim() ? 0.45 : 1 }}
+              onClick={() => onUpdateMemo(cafe.id, memoDraft.trim())}
+              disabled={memoDraft.trim() === favoriteMemo.trim()}
+            >
+              메모 저장
+            </button>
+          </div>
+        )}
         <p style={styles.detailAddress}>{cafe.dong} · {cafe.address}</p>
         <div style={styles.badgeRow}>
           {FILTERS.filter((filter) => cafe.tags[filter.key]).map(({ key, label, icon: Icon }) => (
@@ -2044,7 +2116,7 @@ function CafeForm({ pickedLoc, onCancel, onSubmit, mapStatus, onSetLoc }) {
 }
 
 /* ---------- 실제 네이버 지도 ---------- */
-function NaverRealMap({ cafes, allCafes, selected, hovered, onSelect, onHover, pickMode, onPick, pickedLoc, onViewportChange }) {
+function NaverRealMap({ cafes, allCafes, selected, hovered, favoriteMemos = {}, onSelect, onHover, pickMode, onPick, pickedLoc, onViewportChange }) {
   const mapRef = useRef(null);
   const mapObj = useRef(null);
   const markersRef = useRef({});
@@ -2118,14 +2190,16 @@ function NaverRealMap({ cafes, allCafes, selected, hovered, onSelect, onHover, p
         const idStr = String(c.id);
         const position = new naver.maps.LatLng(c.lat, c.lng);
 
-        // 카페 이름 라벨 (핀 밑, 클릭 불가, 항상 표시)
+        // 카페 이름(+즐겨찾기 메모) 라벨 (핀 밑, 클릭 불가, 항상 표시)
+        const memo = favoriteMemos[idStr];
         if (labelsRef.current[idStr]) {
           labelsRef.current[idStr].setPosition(position);
+          labelsRef.current[idStr].setIcon(labelIcon(naver, c.name, memo));
         } else {
           labelsRef.current[idStr] = new naver.maps.Marker({
             position,
             map,
-            icon: labelIcon(naver, c.name),
+            icon: labelIcon(naver, c.name, memo),
             clickable: false,
             zIndex: 1,
           });
@@ -2173,7 +2247,7 @@ function NaverRealMap({ cafes, allCafes, selected, hovered, onSelect, onHover, p
     } catch (e) {
       console.error("마커 갱신 실패:", e);
     }
-  }, [cafes, selected]);
+  }, [cafes, selected, favoriteMemos]);
 
   // 선택/호버 상태가 바뀔 때는 기존 마커의 아이콘만 교체 (재생성 없음)
   useEffect(() => {
@@ -2257,7 +2331,7 @@ function NaverRealMap({ cafes, allCafes, selected, hovered, onSelect, onHover, p
 }
 
 /* ---------- 목업(일러스트) 지도 - Client ID 없을 때 대체 ---------- */
-function MockMapView({ cafes, selected, hovered, onSelect, onHover, pickMode, onPick, pickedLoc, onViewportChange }) {
+function MockMapView({ cafes, selected, hovered, favoriteMemos = {}, onSelect, onHover, pickMode, onPick, pickedLoc, onViewportChange }) {
   useEffect(() => {
     onViewportChange(BOUNDS, true);
   }, [onViewportChange]);
@@ -2337,6 +2411,22 @@ function MockMapView({ cafes, selected, hovered, onSelect, onHover, pickMode, on
                 fontFamily="'Noto Sans KR', sans-serif"
               >
                 {c.name}
+              </text>
+            )}
+            {favoriteMemos[String(c.id)] && (
+              <text
+                x="0"
+                y={(isSelected || isHovered ? 3.4 + 9 : 3.4 + 8)}
+                textAnchor="middle"
+                fontSize="2.2"
+                fontWeight="500"
+                fill="#B5533C"
+                stroke="#FFFDF8"
+                strokeWidth="0.8"
+                paintOrder="stroke"
+                fontFamily="'Noto Sans KR', sans-serif"
+              >
+                {favoriteMemos[String(c.id)].length > 18 ? favoriteMemos[String(c.id)].slice(0, 18) + "…" : favoriteMemos[String(c.id)]}
               </text>
             )}
           </g>
@@ -2579,6 +2669,9 @@ const styles = {
   favoriteBtn: { display: "flex", alignItems: "center", justifyContent: "center", gap: 7, width: "100%", minHeight: 44, marginTop: 12, borderRadius: 10, border: `1px solid ${COLOR.accent}`, background: COLOR.surface, color: COLOR.accent, fontSize: 14, fontWeight: 700, cursor: "pointer" },
   favoriteBtnActive: { background: COLOR.accent, color: "#FFFDF8" },
   favoriteStar: { fontSize: 17, lineHeight: 1 },
+  favoriteMemoBox: { display: "flex", gap: 7, alignItems: "stretch", marginTop: 8 },
+  favoriteMemoInput: { flex: 1, minHeight: 44, padding: "8px 10px", borderRadius: 9, border: `1px solid ${COLOR.border}`, background: "#FAF8F0", fontSize: 13, lineHeight: 1.4, fontFamily: "'Noto Sans KR', sans-serif", color: COLOR.ink, resize: "vertical" },
+  favoriteMemoSaveBtn: { flexShrink: 0, minWidth: 68, border: "none", borderRadius: 9, background: COLOR.accent, color: "#FFFDF8", fontSize: 12.5, fontWeight: 700, cursor: "pointer" },
 
   /* 지도 우측 즐겨찾기 보기 토글 */
   favoritesToggleBtn: { position: "absolute", right: 16, bottom: "calc(104px + env(safe-area-inset-bottom, 0px))", zIndex: 25, width: 78, height: 60, borderRadius: 16, border: "none", background: "#FFFFFF", color: COLOR.ink, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 2, cursor: "pointer", boxShadow: "0 6px 16px rgba(38,36,31,0.22)" },
