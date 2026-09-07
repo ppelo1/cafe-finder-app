@@ -1324,6 +1324,15 @@ function CafeFinderInner() {
   );
 }
 
+function NaverMapIcon({ size = 26 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 40 40" aria-hidden="true">
+      <rect width="40" height="40" rx="10" fill="#03C75A" />
+      <path d="M20 8c-5 0-9 3.9-9 8.8 0 6.2 7.6 13.4 8.5 14.2.3.3.7.3 1 0 .9-.8 8.5-8 8.5-14.2C29 11.9 25 8 20 8z" fill="#fff" />
+      <circle cx="20" cy="16.6" r="3.4" fill="#03C75A" />
+    </svg>
+  );
+}
 function KakaoLogo({ size = 18 }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true">
@@ -1681,7 +1690,16 @@ function CafeDetailModal({ cafe, onClose, onAddReview, isFavorite, favoriteMemo 
             <strong style={styles.infoCardValue}>{cafe.phone || "등록된 번호 없음"}</strong>
           </div>
         </div>
-        <a href={naverMapUrl} target="_blank" rel="noreferrer" style={styles.naverMapLink}>네이버 지도에서 보기 ↗</a>
+        <a
+          href={naverMapUrl}
+          target="_blank"
+          rel="noreferrer"
+          style={styles.naverMapBtn}
+          aria-label="네이버 지도에서 보기"
+          title="네이버 지도에서 보기"
+        >
+          <NaverMapIcon size={26} />
+        </a>
         <section style={styles.reviewSection}>
           <div style={styles.detailTabs} role="tablist" aria-label="카페 상세 정보 탭">
             <button type="button" role="tab" aria-selected={detailTab === "photos"} style={{ ...styles.detailTab, ...(detailTab === "photos" ? styles.detailTabActive : {}) }} onClick={() => setDetailTab("photos")}>
@@ -2702,7 +2720,7 @@ const styles = {
   statusDot: { width: 8, height: 8, borderRadius: 4, flexShrink: 0 },
   detailInfoGridItem: { padding: 10, background: COLOR.surface },
   detailInfoLabel: { display: "flex", alignItems: "center", gap: 5, color: COLOR.inkSoft, fontSize: 11.5 },
-  naverMapLink: { display: "block", margin: "0 0 16px", color: COLOR.teal, fontSize: 11.5, fontWeight: 600, textAlign: "right", textDecoration: "underline", textUnderlineOffset: 3 },
+  naverMapBtn: { display: "flex", alignItems: "center", justifyContent: "center", width: 42, height: 42, marginLeft: "auto", marginBottom: 16, borderRadius: 12, border: `1px solid ${COLOR.border}`, background: COLOR.surface },
   reviewSection: { borderTop: `1px solid ${COLOR.border}`, paddingTop: 15 },
   detailTabs: { display: "flex", gap: 4, marginBottom: 15, borderBottom: `1px solid ${COLOR.border}` },
   detailTab: { flex: 1, minHeight: 44, padding: "0 8px", border: "none", borderBottom: "2px solid transparent", background: "transparent", color: COLOR.inkSoft, fontSize: 13, fontWeight: 600, cursor: "pointer", touchAction: "manipulation" },
