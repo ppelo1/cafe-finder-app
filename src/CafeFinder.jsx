@@ -1324,6 +1324,14 @@ function CafeFinderInner() {
   );
 }
 
+function CopyIcon({ size = 13 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="9" y="9" width="13" height="13" rx="2" />
+      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+    </svg>
+  );
+}
 function NaverMapIcon({ size = 26 }) {
   return (
     <svg width={size} height={size} viewBox="0 0 40 40" aria-hidden="true">
@@ -1407,6 +1415,22 @@ function CafeDetailModal({ cafe, onClose, onAddReview, isFavorite, favoriteMemo 
   const [memoDraft, setMemoDraft] = useState(favoriteMemo);
   useEffect(() => { setMemoDraft(favoriteMemo); }, [favoriteMemo, cafe.id]);
   const naverMapUrl = `https://map.naver.com/v5/?c=${cafe.lng},${cafe.lat},15,0,0,0,dh`;
+  const [addrCopied, setAddrCopied] = useState(false);
+  const copyAddress = async () => {
+    const text = `${cafe.dong ? cafe.dong + " " : ""}${cafe.address}`.trim();
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch (e) {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand("copy"); } catch (err) { /* noop */ }
+      document.body.removeChild(ta);
+    }
+    setAddrCopied(true);
+    setTimeout(() => setAddrCopied(false), 1500);
+  };
   const reviewPhotoList = (cafe.reviews || []).flatMap((review) => review.images || []);
   const detailModalRef = useRef(null);
   const detailDragRef = useRef({ startY: 0, dragging: false });
@@ -1664,6 +1688,16 @@ function CafeDetailModal({ cafe, onClose, onAddReview, isFavorite, favoriteMemo 
         )}
         <div style={styles.detailAddressRow}>
           <p style={styles.detailAddress}>{cafe.dong} · {cafe.address}</p>
+          <button
+            type="button"
+            style={styles.addrCopyChip}
+            onClick={copyAddress}
+            aria-label="주소 복사"
+            title="주소 복사"
+          >
+            <CopyIcon size={13} />
+            {addrCopied ? "복사됨" : "복사"}
+          </button>
           <a
             href={naverMapUrl}
             target="_blank"
@@ -2718,6 +2752,7 @@ const styles = {
   detailAddressRow: { display: "flex", alignItems: "center", gap: 8, margin: "0 0 10px" },
   detailAddress: { flex: 1, minWidth: 0, margin: 0, color: COLOR.inkSoft, fontSize: 13 },
   naverMapChip: { flexShrink: 0, display: "inline-flex", alignItems: "center", gap: 4, padding: "5px 10px", borderRadius: 999, border: `1px solid ${COLOR.border}`, background: COLOR.surface, color: COLOR.ink, fontSize: 11, fontWeight: 700, textDecoration: "none", whiteSpace: "nowrap" },
+  addrCopyChip: { flexShrink: 0, display: "inline-flex", alignItems: "center", gap: 4, padding: "5px 10px", borderRadius: 999, border: `1px solid ${COLOR.border}`, background: COLOR.surface, color: COLOR.inkSoft, fontSize: 11, fontWeight: 700, whiteSpace: "nowrap", cursor: "pointer" },
   detailDescription: { margin: "8px 0 14px", color: "#514C40", fontSize: 13.5, lineHeight: 1.55 },
   detailInfoGrid: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 },
   infoCard: { display: "flex", flexDirection: "column", gap: 6, padding: "12px 14px", borderRadius: 12, border: `1px solid ${COLOR.borderSoft}`, background: COLOR.surface },
