@@ -1583,7 +1583,16 @@ function CafeDetailModal({ cafe, onClose, onAddReview, isFavorite, favoriteMemo 
         <button
           type="button"
           style={{ ...styles.favoriteBtn, ...(isFavorite ? styles.favoriteBtnActive : {}) }}
-          onClick={() => (isLoggedIn ? onToggleFavorite(cafe.id) : onRequireLogin())}
+          onClick={() => {
+            if (!isLoggedIn) { onRequireLogin(); return; }
+            if (isFavorite) {
+              const msg = favoriteMemo.trim()
+                ? "즐겨찾기를 해제할까요? 입력한 메모도 함께 삭제됩니다."
+                : "즐겨찾기를 해제할까요?";
+              if (!window.confirm(msg)) return;
+            }
+            onToggleFavorite(cafe.id);
+          }}
           aria-pressed={isFavorite}
         >
           <span style={styles.favoriteStar}>{isFavorite ? "★" : "☆"}</span>
