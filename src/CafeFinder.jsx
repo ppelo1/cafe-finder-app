@@ -336,9 +336,15 @@ function pinDataUrl(color, filled) {
 /* 핀 PNG(둘 다 1254x1254) 안에서 핀 끝(지도 좌표를 가리키는 점)의 비율 위치 */
 const PIN_IMG_TIP_RATIO = { x: 0.496, y: 0.8327 };
 const PIN_IMG_SELECTED_TIP_RATIO = { x: 0.493, y: 0.842 };
-function pinIconSpec(isSelected, isHovered) {
+// 줌 레벨에 따라 마커 크기 배율 (기준 줌 15 에서 1배, 축소하면 작게 / 확대하면 크게)
+function zoomScaleFor(zoom) {
+  const z = Number.isFinite(zoom) ? zoom : 15;
+  return Math.max(0.55, Math.min(1.7, 1 + (z - 15) * 0.13));
+}
+
+function pinIconSpec(isSelected, isHovered, zoomScale = 1) {
   if (isSelected) {
-    const size = 88;
+    const size = Math.round(88 * zoomScale);
     return {
       url: pinCafeSelectedImg,
       w: size,
@@ -349,7 +355,7 @@ function pinIconSpec(isSelected, isHovered) {
       anchorY: Math.round(size * PIN_IMG_SELECTED_TIP_RATIO.y),
     };
   }
-  const size = isHovered ? 72 : 62;
+  const size = Math.round((isHovered ? 72 : 62) * zoomScale);
   return {
     url: pinCafeImg,
     w: size,
@@ -378,12 +384,12 @@ function pinImageIcon(naver, spec) {
 }
 
 /* 핀 바로 밑에 붙는 라벨 (별도 마커 - content 아이콘이라 잘리지 않음)
-   카페 이름 + (즐겨찾기 메모가 있으면) 그 아래 메모 최대 3줄 */
+   카페 이름 + (즐겨찾기 메모가 있으면) 그 아래 메모 최대 4줄 */
 function labelIcon(naver, name, memo) {
   const halo = "0 0 3px #FFFDF8,0 0 3px #FFFDF8,0 1px 2px rgba(255,253,248,0.95)";
   const memoHtml = memo && memo.trim()
     ? `<div style="margin-top:2px;max-width:160px;white-space:normal;word-break:break-word;` +
-      `display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;` +
+      `display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden;` +
       `font:500 11px/1.25 'Noto Sans KR',sans-serif;color:#B5533C;text-shadow:${halo};">` +
       `${escapeHtml(memo.trim())}</div>`
     : "";
@@ -1590,8 +1596,8 @@ function CafeDetailModal({ cafe, onClose, onAddReview, isFavorite, favoriteMemo 
               value={memoDraft}
               onChange={(event) => setMemoDraft(event.target.value)}
               placeholder="메모 (예: 2층 콘센트 자리 많음, 오후엔 붐빔)"
-              rows={2}
-              maxLength={200}
+              rows={4}
+              maxLength={280}
             />
             <button
               type="button"
@@ -1927,11 +1933,11 @@ function CafeForm({ pickedLoc, onCancel, onSubmit, mapStatus, onSetLoc }) {
             주소 *
             <div style={styles.placeSearchRow}>
               <input
-                style={styles.input}
+                style={{ ...styles.input, flex: 1, minWidth: 0, width: "100%" }}
                 value={placeQuery}
                 onChange={(e) => setPlaceQuery(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter") searchPlace(); }}
-                placeholder="카페명 또는 주소로 검색 (예: 명동 투썸플레이스)"
+                placeholder="카페명 또는 주소로 검색"
               />
               <button type="button" style={styles.placeSearchBtn} onClick={searchPlace} disabled={!placeQuery.trim() || placeSearching}>
                 {placeSearching ? "검색 중..." : "검색"}
@@ -2134,6 +2140,22 @@ function NaverRealMap({ cafes, allCafes, selected, hovered, favoriteMemos = {}, 
   const selectedRef = useRef(selected);
   const hoveredRef = useRef(hovered);
   const initialIdleRef = useRef(true);
+  const zoomRef = useRef(14);
+
+  // 현재 줌 배율로 모든 핀 아이콘을 다시 적용
+  const applyPinIcons = () => {
+    if (!window.naver) return;
+    const { naver } = window;
+    const scale = zoomScaleFor(zoomRef.current);
+    Object.entries(markersRef.current).forEach(([idStr, marker]) => {
+      const isSel = String(selectedRef.current) === idStr;
+      const isHov = String(hoveredRef.current) === idStr;
+      try {
+        marker.setIcon(pinImageIcon(naver, pinIconSpec(isSel, isHov, scale)));
+        if (typeof marker.setZIndex === "function") marker.setZIndex(isSel ? 1000 : 2);
+      } catch (e) { /* noop */ }
+    });
+  };
 
   useEffect(() => { onSelectRef.current = onSelect; }, [onSelect]);
   useEffect(() => { onHoverRef.current = onHover; }, [onHover]);
@@ -2148,6 +2170,12 @@ function NaverRealMap({ cafes, allCafes, selected, hovered, favoriteMemos = {}, 
       mapObj.current = new naver.maps.Map(mapRef.current, {
         center: new naver.maps.LatLng(37.5535, 126.914),
         zoom: 14,
+      });
+      zoomRef.current = mapObj.current.getZoom();
+      // 줌이 바뀌면 마커 크기를 줌 배율에 맞춰 다시 그린다
+      naver.maps.Event.addListener(mapObj.current, "zoom_changed", () => {
+        zoomRef.current = mapObj.current.getZoom();
+        applyPinIcons();
       });
     } catch (e) {
       console.error("네이버 지도 초기화 실패:", e);
@@ -2219,7 +2247,7 @@ function NaverRealMap({ cafes, allCafes, selected, hovered, favoriteMemos = {}, 
         // 마커가 항상 기본색으로만 생성되던 문제.
         const idIsSelected = String(selectedRef.current) === idStr;
         const idIsHovered = String(hoveredRef.current) === idStr;
-        const spec = pinIconSpec(idIsSelected, idIsHovered);
+        const spec = pinIconSpec(idIsSelected, idIsHovered, zoomScaleFor(zoomRef.current));
         const marker = new naver.maps.Marker({
           position,
           map,
@@ -2259,10 +2287,11 @@ function NaverRealMap({ cafes, allCafes, selected, hovered, favoriteMemos = {}, 
     if (!window.naver) return;
     const { naver } = window;
     try {
+      const scale = zoomScaleFor(zoomRef.current);
       Object.entries(markersRef.current).forEach(([idStr, marker]) => {
         const isSelected = String(selected) === idStr;
         const isHovered = String(hovered) === idStr;
-        const spec = pinIconSpec(isSelected, isHovered);
+        const spec = pinIconSpec(isSelected, isHovered, scale);
         marker.setIcon(pinImageIcon(naver, spec));
         if (typeof marker.setZIndex === "function") marker.setZIndex(isSelected ? 1000 : 2);
       });
@@ -2421,11 +2450,14 @@ function MockMapView({ cafes, selected, hovered, favoriteMemos = {}, onSelect, o
             {favoriteMemos[String(c.id)] && (() => {
               const memo = favoriteMemos[String(c.id)];
               const perLine = 14;
+              const maxLines = 4;
               const lines = [];
-              for (let i = 0; i < memo.length && lines.length < 3; i += perLine) {
+              for (let i = 0; i < memo.length && lines.length < maxLines; i += perLine) {
                 lines.push(memo.slice(i, i + perLine));
               }
-              if (memo.length > perLine * 3) lines[2] = lines[2].slice(0, perLine - 1) + "…";
+              if (memo.length > perLine * maxLines) {
+                lines[maxLines - 1] = lines[maxLines - 1].slice(0, perLine - 1) + "…";
+              }
               const baseY = (isSelected || isHovered ? 3.4 + 9 : 3.4 + 8);
               return (
                 <text
@@ -2702,8 +2734,8 @@ const styles = {
   input: { padding: "9px 10px", borderRadius: 8, border: `1px solid ${COLOR.border}`, fontSize: 15, fontFamily: "'Noto Sans KR', sans-serif", color: COLOR.ink },
   naverPlaceHint: { color: COLOR.teal, fontSize: 11 },
   addressSearchBtn: { display: "flex", alignItems: "center", gap: 6, padding: "9px 10px", borderRadius: 8, border: `1px solid ${COLOR.border}`, background: COLOR.surface, color: COLOR.inkSoft, fontSize: 13.5, cursor: "pointer" },
-  placeSearchRow: { display: "flex", alignItems: "stretch", gap: 7 },
-  placeSearchBtn: { flexShrink: 0, minWidth: 62, border: "none", borderRadius: 8, background: COLOR.teal, color: "#FFFDF8", fontSize: 12.5, fontWeight: 600, cursor: "pointer" },
+  placeSearchRow: { display: "flex", alignItems: "stretch", gap: 7, width: "100%" },
+  placeSearchBtn: { flexShrink: 0, width: 58, padding: 0, border: "none", borderRadius: 8, background: COLOR.teal, color: "#FFFDF8", fontSize: 12.5, fontWeight: 600, cursor: "pointer" },
   placeResults: { display: "flex", flexDirection: "column", gap: 5, marginTop: 7, padding: 8, borderRadius: 9, border: `1px solid ${COLOR.border}`, background: "#FAF8F0" },
   placeResultsTitle: { padding: "2px 4px", color: COLOR.inkSoft, fontSize: 11.5, fontWeight: 600 },
   placeResultBtn: { display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 2, width: "100%", padding: "9px 10px", border: `1px solid ${COLOR.border}`, borderRadius: 8, background: COLOR.surface, color: COLOR.ink, textAlign: "left", cursor: "pointer", touchAction: "manipulation" },
