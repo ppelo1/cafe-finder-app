@@ -730,7 +730,7 @@ function CafeFinderInner() {
   const [favoritesOnly, setFavoritesOnly] = useState(false);
 
   const mapStatus = useNaverMapsScript(NAVER_CONFIG.clientId);
-  const { user, signIn, signOut, authError, clearAuthError } = useAuth();
+  const { user, signIn, authError, clearAuthError } = useAuth();
   const { favoriteIds, toggleFavorite } = useFavorites(user);
 
   const requireLogin = () => setShowLogin(true);
@@ -1191,18 +1191,6 @@ function CafeFinderInner() {
             </button>
           </div>
         </div>
-
-        {mobileTab === "map" && user && (
-          <button
-            type="button"
-            style={styles.accountBtn}
-            onClick={() => { if (window.confirm("로그아웃 할까요?")) signOut(); }}
-            aria-label="로그아웃"
-            title={user.email || "로그인됨"}
-          >
-            {(user.email || user.user_metadata?.name || "?").trim().charAt(0).toUpperCase()}
-          </button>
-        )}
 
         {mobileTab === "map" && (
           <button
@@ -2598,8 +2586,6 @@ const styles = {
   favoritesToggleStar: { fontSize: 20, lineHeight: 1 },
   favoritesToggleLabel: { fontSize: 10.5, fontWeight: 700 },
 
-  /* 로그인 상태 표시 / 로그아웃 */
-  accountBtn: { position: "absolute", right: 16, bottom: "calc(172px + env(safe-area-inset-bottom, 0px))", zIndex: 25, width: 44, height: 44, borderRadius: 22, border: "2px solid #FFFFFF", background: COLOR.teal, color: "#FFFDF8", fontSize: 17, fontWeight: 700, cursor: "pointer", boxShadow: "0 4px 12px rgba(38,36,31,0.24)" },
   modalTitle: { margin: "0 0 6px", fontFamily: "'Noto Serif KR', serif", fontSize: 20, fontWeight: 700 },
   modalHint: { margin: "0 0 16px", fontSize: 12.5, color: COLOR.inkSoft, background: COLOR.tealSoft, padding: "8px 12px", borderRadius: 8 },
   formGrid: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 },
