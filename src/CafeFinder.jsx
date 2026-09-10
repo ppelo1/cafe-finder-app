@@ -1253,7 +1253,7 @@ function CafeFinderInner() {
             {!queryInput && (
               <span style={styles.searchLogo} aria-hidden="true">
                 <img src={logoCupImg} alt="" style={styles.searchLogoIcon} />
-                카페찾기
+                카페어디
               </span>
             )}
             {queryInput && (
