@@ -1,0 +1,19 @@
+{
+  "name": "카페찾기",
+  "short_name": "카페찾기",
+  "description": "콘센트, 좌석, 대형카페, 인테리어 등 조건으로 필터링해서 작업하기 좋은 동네 카페를 지도에서 쉽게 찾아보세요.",
+  "start_url": "/",
+  "scope": "/",
+  "id": "/",
+  "display": "standalone",
+  "background_color": "#EDE9DD",
+  "theme_color": "#B5533C",
+  "orientation": "portrait",
+  "lang": "ko",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "/app-icon.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/app-icon.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
