@@ -2469,6 +2469,18 @@ function NaverRealMap({ cafes, allCafes, selected, hovered, favoriteMemos = {}, 
         zoomRef.current = mapObj.current.getZoom();
         applyPinIcons();
       });
+
+      // 처음 진입 시 현재 위치로 지도 중심을 옮긴다 (권한 거부/실패 시 기본 위치 유지)
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            if (!mapObj.current) return;
+            mapObj.current.setCenter(new naver.maps.LatLng(pos.coords.latitude, pos.coords.longitude));
+          },
+          () => {},
+          { enableHighAccuracy: false, timeout: 8000, maximumAge: 300000 }
+        );
+      }
     } catch (e) {
       console.error("네이버 지도 초기화 실패:", e);
     }
