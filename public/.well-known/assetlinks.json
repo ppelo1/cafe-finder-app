@@ -1,0 +1,8 @@
+[{
+      "relation": ["delegate_permission/common.handle_all_urls"],
+      "target": {
+        "namespace": "android_app",
+        "package_name": "store.cafeodi.twa",
+        "sha256_cert_fingerprints": ["80:A1:1B:4D:89:9F:FA:DB:91:EE:19:62:43:A1:26:9C:1F:80:EB:D1:E4:57:87:A4:6E:46:07:18:51:4F:4C:63"]
+      }
+    }]
