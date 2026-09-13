@@ -655,6 +655,35 @@ function useFavorites(user) {
   return { favorites, toggleFavorite, updateMemo };
 }
 
+/* ---------- 카페별 메모 (로그인 없이 기기에 저장) ----------
+   즐겨찾기/로그인과 무관하게 누구나 카페에 메모를 남길 수 있다.
+   { [cafeId]: memo } 형태로 이 기기의 localStorage 에만 저장된다.       */
+const CAFE_MEMOS_STORAGE_KEY = "cafe-finder:memos";
+function useCafeMemos() {
+  const [memos, setMemos] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem(CAFE_MEMOS_STORAGE_KEY) || "{}");
+    } catch (e) {
+      return {};
+    }
+  });
+
+  const updateMemo = useCallback((cafeId, memo) => {
+    setMemos((prev) => {
+      const next = { ...prev };
+      const trimmed = memo.trim();
+      if (trimmed) next[cafeId] = trimmed;
+      else delete next[cafeId];
+      try {
+        localStorage.setItem(CAFE_MEMOS_STORAGE_KEY, JSON.stringify(next));
+      } catch (e) { /* noop */ }
+      return next;
+    });
+  }, []);
+
+  return { memos, updateMemo };
+}
+
 /* ---------- 카페 + 리뷰 (Supabase 공유 저장, 없으면 localStorage) ----------
    - Supabase 로그인 상태: cafes/reviews 테이블 (조회는 누구나, 등록은 로그인)
    - Supabase 미설정 / 로컬 테스트 로그인: localStorage (기기별)                 */
@@ -735,7 +764,7 @@ function useCafes(user) {
 
   const addCafe = useCallback(
     async (cafe) => {
-      if (useLocal || !user || user.isDev) {
+      if (useLocal) {
         const local = { ...cafe, id: cafe.id ?? Date.now(), reviews: [] };
         setCafes((prev) => [local, ...prev]);
         return local;
@@ -757,7 +786,7 @@ function useCafes(user) {
           description: cafe.desc || "",
           lat: cafe.lat,
           lng: cafe.lng,
-          created_by: user.id,
+          created_by: user?.id || null,
         })
         .select(CAFE_SELECT)
         .single();
@@ -944,15 +973,9 @@ function CafeFinderInner() {
 
   const mapStatus = useNaverMapsScript(NAVER_CONFIG.clientId);
   const { user, signIn, signOut, authError, clearAuthError } = useAuth();
-  const { favorites, toggleFavorite, updateMemo } = useFavorites(user);
+  const { favorites, toggleFavorite } = useFavorites(user);
+  const { memos: cafeMemos, updateMemo: updateCafeMemo } = useCafeMemos();
   const { cafes, addCafe, addReview: addReviewToStore } = useCafes(user);
-
-  // 마커 라벨용: { [cafeId문자열]: 메모 } (메모 있는 즐겨찾기만)
-  const favoriteMemos = useMemo(() => {
-    const out = {};
-    Object.entries(favorites).forEach(([id, v]) => { if (v.memo) out[id] = v.memo; });
-    return out;
-  }, [favorites]);
 
   const requireLogin = () => setShowLogin(true);
 
@@ -1110,7 +1133,6 @@ function CafeFinderInner() {
   }, []);
 
   const submitCafe = async (data) => {
-    if (!user) { requireLogin(); return; }
     const loc = pickedLoc || { lat: 37.5535, lng: 126.914 }; // 위치 미지정 시 동네 중앙 기본값
     const draft = {
       name: data.name,
@@ -1209,7 +1231,7 @@ function CafeFinderInner() {
               allCafes={filtered}
               selected={selected}
               hovered={hovered}
-              favoriteMemos={favoriteMemos}
+              cafeMemos={cafeMemos}
               onSelect={selectCafe}
               onHover={setHovered}
               pickMode={showForm}
@@ -1222,7 +1244,7 @@ function CafeFinderInner() {
               cafes={mapCafes}
               selected={selected}
               hovered={hovered}
-              favoriteMemos={favoriteMemos}
+              cafeMemos={cafeMemos}
               onSelect={selectCafe}
               onHover={setHovered}
               pickMode={showForm}
@@ -1423,7 +1445,7 @@ function CafeFinderInner() {
           </button>
         )}
 
-        <button style={styles.addBtnFloating} onClick={() => { if (!user) { requireLogin(); return; } setPickedLoc(null); setShowForm(true); }}>
+        <button style={styles.addBtnFloating} onClick={() => { setPickedLoc(null); setShowForm(true); }}>
           <img src={registerIconImg} alt="" aria-hidden="true" style={styles.addBtnIcon} />
           <span style={styles.addBtnLabel}>카페 등록</span>
         </button>
@@ -1436,9 +1458,9 @@ function CafeFinderInner() {
           onAddReview={addReview}
           isLoggedIn={!!user}
           isFavorite={Number(detailCafe.id) in favorites}
-          favoriteMemo={favorites[Number(detailCafe.id)]?.memo || ""}
+          cafeMemo={cafeMemos[detailCafe.id] || ""}
           onToggleFavorite={toggleFavorite}
-          onUpdateMemo={updateMemo}
+          onUpdateMemo={updateCafeMemo}
           onRequireLogin={requireLogin}
         />
       )}
@@ -1586,10 +1608,10 @@ function LoginModal({ onClose, onSignIn, reason, errorText }) {
   );
 }
 
-function CafeDetailModal({ cafe, onClose, onAddReview, isFavorite, favoriteMemo = "", isLoggedIn, onToggleFavorite, onUpdateMemo, onRequireLogin }) {
+function CafeDetailModal({ cafe, onClose, onAddReview, isFavorite, cafeMemo = "", isLoggedIn, onToggleFavorite, onUpdateMemo, onRequireLogin }) {
   const openState = isOpenNow(cafe.hours, cafe.weeklyHours);
-  const [memoDraft, setMemoDraft] = useState(favoriteMemo);
-  useEffect(() => { setMemoDraft(favoriteMemo); }, [favoriteMemo, cafe.id]);
+  const [memoDraft, setMemoDraft] = useState(cafeMemo);
+  useEffect(() => { setMemoDraft(cafeMemo); }, [cafeMemo, cafe.id]);
   const naverMapUrl = `https://map.naver.com/v5/?c=${cafe.lng},${cafe.lat},15,0,0,0,dh`;
   const [addrCopied, setAddrCopied] = useState(false);
   const copyAddress = async () => {
@@ -1834,12 +1856,7 @@ function CafeDetailModal({ cafe, onClose, onAddReview, isFavorite, favoriteMemo 
           style={{ ...styles.favoriteBtn, ...(isFavorite ? styles.favoriteBtnActive : {}) }}
           onClick={() => {
             if (!isLoggedIn) { onRequireLogin(); return; }
-            if (isFavorite) {
-              const msg = favoriteMemo.trim()
-                ? "즐겨찾기를 해제할까요? 입력한 메모도 함께 삭제됩니다."
-                : "즐겨찾기를 해제할까요?";
-              if (!window.confirm(msg)) return;
-            }
+            if (isFavorite && !window.confirm("즐겨찾기를 해제할까요?")) return;
             onToggleFavorite(cafe.id);
           }}
           aria-pressed={isFavorite}
@@ -1847,26 +1864,24 @@ function CafeDetailModal({ cafe, onClose, onAddReview, isFavorite, favoriteMemo 
           <span style={styles.favoriteStar}>{isFavorite ? "★" : "☆"}</span>
           {isFavorite ? "즐겨찾기 완료" : "즐겨찾기"}
         </button>
-        {isLoggedIn && isFavorite && (
-          <div style={styles.favoriteMemoBox}>
-            <textarea
-              style={styles.favoriteMemoInput}
-              value={memoDraft}
-              onChange={(event) => setMemoDraft(event.target.value)}
-              placeholder="메모 (예: 2층 콘센트 자리 많음, 오후엔 붐빔)"
-              rows={4}
-              maxLength={280}
-            />
-            <button
-              type="button"
-              style={{ ...styles.favoriteMemoSaveBtn, opacity: memoDraft.trim() === favoriteMemo.trim() ? 0.45 : 1 }}
-              onClick={() => onUpdateMemo(cafe.id, memoDraft.trim())}
-              disabled={memoDraft.trim() === favoriteMemo.trim()}
-            >
-              메모 저장
-            </button>
-          </div>
-        )}
+        <div style={styles.favoriteMemoBox}>
+          <textarea
+            style={styles.favoriteMemoInput}
+            value={memoDraft}
+            onChange={(event) => setMemoDraft(event.target.value)}
+            placeholder="메모 (예: 2층 콘센트 자리 많음, 오후엔 붐빔) · 로그인 없이도 이 기기에 저장돼요"
+            rows={4}
+            maxLength={280}
+          />
+          <button
+            type="button"
+            style={{ ...styles.favoriteMemoSaveBtn, opacity: memoDraft.trim() === cafeMemo.trim() ? 0.45 : 1 }}
+            onClick={() => onUpdateMemo(cafe.id, memoDraft.trim())}
+            disabled={memoDraft.trim() === cafeMemo.trim()}
+          >
+            메모 저장
+          </button>
+        </div>
         <div style={styles.detailAddressRow}>
           <p style={styles.detailAddress}>
             <MapPinOutlineIcon size={15} color={COLOR.accent} />
@@ -2419,7 +2434,7 @@ function CafeForm({ pickedLoc, onCancel, onSubmit, mapStatus, onSetLoc }) {
 }
 
 /* ---------- 실제 네이버 지도 ---------- */
-function NaverRealMap({ cafes, allCafes, selected, hovered, favoriteMemos = {}, onSelect, onHover, pickMode, onPick, pickedLoc, onViewportChange }) {
+function NaverRealMap({ cafes, allCafes, selected, hovered, cafeMemos = {}, onSelect, onHover, pickMode, onPick, pickedLoc, onViewportChange }) {
   const mapRef = useRef(null);
   const mapObj = useRef(null);
   const markersRef = useRef({});
@@ -2530,7 +2545,7 @@ function NaverRealMap({ cafes, allCafes, selected, hovered, favoriteMemos = {}, 
         // 카페 이름(+즐겨찾기 메모) 라벨 (핀 밑, 클릭 불가, 항상 표시)
         // 이름/메모가 바뀌면 setIcon 대신 라벨 마커를 새로 만든다
         // (네이버 HTML 마커는 setIcon 후 화면 갱신이 안 되는 경우가 있음).
-        const memo = favoriteMemos[idStr] || "";
+        const memo = cafeMemos[idStr] || "";
         const existing = labelsRef.current[idStr];
         if (existing && existing._cfName === c.name && existing._cfMemo === memo) {
           existing.setPosition(position);
@@ -2590,7 +2605,7 @@ function NaverRealMap({ cafes, allCafes, selected, hovered, favoriteMemos = {}, 
     } catch (e) {
       console.error("마커 갱신 실패:", e);
     }
-  }, [cafes, selected, favoriteMemos]);
+  }, [cafes, selected, cafeMemos]);
 
   // 선택/호버 상태가 바뀔 때는 기존 마커의 아이콘만 교체 (재생성 없음)
   useEffect(() => {
@@ -2675,7 +2690,7 @@ function NaverRealMap({ cafes, allCafes, selected, hovered, favoriteMemos = {}, 
 }
 
 /* ---------- 목업(일러스트) 지도 - Client ID 없을 때 대체 ---------- */
-function MockMapView({ cafes, selected, hovered, favoriteMemos = {}, onSelect, onHover, pickMode, onPick, pickedLoc, onViewportChange }) {
+function MockMapView({ cafes, selected, hovered, cafeMemos = {}, onSelect, onHover, pickMode, onPick, pickedLoc, onViewportChange }) {
   useEffect(() => {
     onViewportChange(BOUNDS, true);
   }, [onViewportChange]);
@@ -2757,8 +2772,8 @@ function MockMapView({ cafes, selected, hovered, favoriteMemos = {}, onSelect, o
                 {c.name}
               </text>
             )}
-            {favoriteMemos[String(c.id)] && (() => {
-              const memo = favoriteMemos[String(c.id)];
+            {cafeMemos[String(c.id)] && (() => {
+              const memo = cafeMemos[String(c.id)];
               const perLine = 14;
               const maxLines = 4;
               const lines = [];
