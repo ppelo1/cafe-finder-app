@@ -184,7 +184,7 @@ function todayKey() {
 }
 
 /* 운영시간 문자열("HH:MM - HH:MM" 또는 "24시간")을 현재 시각과 비교 */
-function isOpenNow(hoursStr, weeklyHours) {
+function isOpenAtMinutes(hoursStr, weeklyHours, curMinutes) {
   if (weeklyHours) {
     const today = weeklyHours[todayKey()];
     if (!today || today.closed) return false;
@@ -195,38 +195,27 @@ function isOpenNow(hoursStr, weeklyHours) {
   const m = hoursStr.match(/(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})/);
   if (!m) return null;
   const sh = Number(m[1]), sm = Number(m[2]), eh = Number(m[3]), em = Number(m[4]);
-  const now = new Date();
-  const cur = now.getHours() * 60 + now.getMinutes();
   const start = sh * 60 + sm;
   const end = eh * 60 + em;
   if (start === end) return true;
-  if (start < end) return cur >= start && cur < end;
-  return cur >= start || cur < end; // 자정을 넘기는 영업시간
+  if (start < end) return curMinutes >= start && curMinutes < end;
+  return curMinutes >= start || curMinutes < end; // 자정을 넘기는 영업시간
 }
 
-/* 오늘 마감 시각을 자정(0시) 기준 분 단위로 반환 (24시간 영업이면 Infinity, 알 수 없으면 null) */
-function closingMinutesToday(cafe) {
-  let hoursStr = cafe.hours;
-  if (cafe.weeklyHours) {
-    const today = cafe.weeklyHours[todayKey()];
-    if (!today || today.closed) return null;
-    hoursStr = `${today.open} - ${today.close}`;
-  }
-  if (!hoursStr) return null;
-  if (hoursStr.includes("24시간")) return Infinity;
-  const m = hoursStr.match(/(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})/);
-  if (!m) return null;
-  const start = Number(m[1]) * 60 + Number(m[2]);
-  const end = Number(m[3]) * 60 + Number(m[4]);
-  if (start === end) return Infinity; // 24시간 영업으로 표기된 경우
-  return end <= start ? end + 24 * 60 : end; // 자정을 넘기는 영업시간 보정
+function isOpenNow(hoursStr, weeklyHours) {
+  const now = new Date();
+  return isOpenAtMinutes(hoursStr, weeklyHours, now.getHours() * 60 + now.getMinutes());
 }
 
-const CLOSING_HOUR_OPTIONS = [
-  { value: 21, label: "21시 이후" },
-  { value: 22, label: "22시 이후" },
-  { value: 23, label: "23시 이후" },
-  { value: 24, label: "자정 이후" },
+/* 영업시간 필터 선택지: 오후 6시부터 자정까지, 이 시각에 실제로 열려있는 카페만 걸러낸다 */
+const TIME_FILTER_OPTIONS = [
+  { value: "18:00", label: "오후 6시" },
+  { value: "19:00", label: "오후 7시" },
+  { value: "20:00", label: "오후 8시" },
+  { value: "21:00", label: "오후 9시" },
+  { value: "22:00", label: "오후 10시" },
+  { value: "23:00", label: "오후 11시" },
+  { value: "00:00", label: "자정 (12시)" },
 ];
 
 /* ---------- 아이콘 ---------- */
@@ -989,8 +978,9 @@ function CafeFinderInner() {
   const [queryInput, setQueryInput] = useState("");
   const [query, setQuery] = useState("");
   const [openNowOnly, setOpenNowOnly] = useState(false);
+  const [timeFilter, setTimeFilter] = useState(null); // "HH:MM" | null
+  const [showTimePicker, setShowTimePicker] = useState(false);
   const [outletRangeFilter, setOutletRangeFilter] = useState(null);
-  const [closingHourFilter, setClosingHourFilter] = useState(null);
   const [showFilterPanel, setShowFilterPanel] = useState(false);
   const [mapNoticeDismissed, setMapNoticeDismissed] = useState(false);
   const [mapViewport, setMapViewport] = useState(null);
@@ -1029,11 +1019,7 @@ function CafeFinderInner() {
     setOutletRangeFilter((current) => current === range ? null : range);
   };
 
-  const toggleClosingHourFilter = (hour) => {
-    setClosingHourFilter((current) => current === hour ? null : hour);
-  };
-
-  const hiddenFiltersActive = active.has("cute") || active.has("parking") || !!outletRangeFilter || !!closingHourFilter;
+  const hiddenFiltersActive = active.has("cute") || active.has("parking") || !!outletRangeFilter;
 
   const handleFilterMouseDown = (event) => {
     if (event.button !== 0 || !filterBarRef.current) return;
@@ -1077,12 +1063,10 @@ function CafeFinderInner() {
     if (openNowOnly) {
       list = list.filter((c) => isOpenNow(c.hours, c.weeklyHours) === true);
     }
-    if (closingHourFilter) {
-      const threshold = closingHourFilter * 60;
-      list = list.filter((c) => {
-        const closing = closingMinutesToday(c);
-        return closing !== null && closing >= threshold;
-      });
+    if (timeFilter) {
+      const [h, m] = timeFilter.split(":").map(Number);
+      const mins = h * 60 + m;
+      list = list.filter((c) => isOpenAtMinutes(c.hours, c.weeklyHours, mins) === true);
     }
     const q = query.trim().toLowerCase();
     if (q) {
@@ -1094,7 +1078,7 @@ function CafeFinderInner() {
       list = list.filter((c) => Number(c.id) in favorites);
     }
     return list;
-  }, [active, cafes, query, openNowOnly, closingHourFilter, outletRangeFilter, favoritesOnly, favorites]);
+  }, [active, cafes, query, openNowOnly, timeFilter, outletRangeFilter, favoritesOnly, favorites]);
 
   const mapCafes = useMemo(() => {
     // 즐겨찾기 보기일 땐 흩어져 있어도 다 보이도록 뷰포트 필터를 건너뛴다.
@@ -1344,6 +1328,14 @@ function CafeFinderInner() {
                 <ClockIcon size={15} color={openNowOnly ? "#FFFDF8" : "#5B5648"} />
                 지금 영업중
               </button>
+              <button
+                onClick={() => setShowTimePicker((v) => !v)}
+                style={{ ...styles.filterChip, ...(timeFilter ? styles.filterChipActive : {}) }}
+                aria-expanded={showTimePicker}
+              >
+                <ClockIcon size={15} color={timeFilter ? "#FFFDF8" : "#5B5648"} />
+                {timeFilter ? TIME_FILTER_OPTIONS.find((o) => o.value === timeFilter)?.label ?? "영업시간" : "영업시간"}
+              </button>
               {FILTERS.filter(({ key }) => key === "large" || key === "interior").map(({ key, label, icon: Icon }) => {
                 const isActive = active.has(key);
                 return (
@@ -1366,6 +1358,28 @@ function CafeFinderInner() {
                 <SlidersIcon size={16} color={hiddenFiltersActive ? "#FFFDF8" : "#5B5648"} />
               </button>
             </div>
+            {showTimePicker && (
+              <div style={styles.timeFilterPopover} onClick={(e) => e.stopPropagation()}>
+                <label style={styles.timeFilterLabel}>
+                  이 시간에 영업 중인 카페만 보기
+                  <select
+                    style={styles.timeFilterSelect}
+                    value={timeFilter || ""}
+                    onChange={(e) => setTimeFilter(e.target.value || null)}
+                  >
+                    <option value="">선택 안 함</option>
+                    {TIME_FILTER_OPTIONS.map(({ value, label }) => (
+                      <option key={value} value={value}>{label}</option>
+                    ))}
+                  </select>
+                </label>
+                {timeFilter && (
+                  <button type="button" style={styles.timeFilterResetBtn} onClick={() => setTimeFilter(null)}>
+                    초기화
+                  </button>
+                )}
+              </div>
+            )}
             {showFilterPanel && (
               <div style={styles.filterFullMenu}>
                 <div style={styles.filterFullMenuHeader}>
@@ -1401,16 +1415,9 @@ function CafeFinderInner() {
                     <button key={value} type="button" style={{ ...styles.outletFilterOption, ...(outletRangeFilter === value ? styles.outletFilterOptionActive : {}) }} onClick={() => toggleOutletRangeFilter(value)}>{label}</button>
                   ))}
                 </div>
-                <strong style={styles.outletFilterTitle}>마감 시간</strong>
-                <div style={styles.outletFilterOptions}>
-                  <button type="button" style={{ ...styles.outletFilterOption, ...(closingHourFilter === null ? styles.outletFilterOptionActive : {}) }} onClick={() => setClosingHourFilter(null)}>전체</button>
-                  {CLOSING_HOUR_OPTIONS.map(({ value, label }) => (
-                    <button key={value} type="button" style={{ ...styles.outletFilterOption, ...(closingHourFilter === value ? styles.outletFilterOptionActive : {}) }} onClick={() => toggleClosingHourFilter(value)}>{label}</button>
-                  ))}
-                </div>
-                {(active.size > 0 || openNowOnly || outletRangeFilter || closingHourFilter) && (
+                {(active.size > 0 || openNowOnly || outletRangeFilter || timeFilter) && (
                   <button
-                    onClick={() => { setActive(new Set()); setOpenNowOnly(false); setOutletRangeFilter(null); setClosingHourFilter(null); }}
+                    onClick={() => { setActive(new Set()); setOpenNowOnly(false); setOutletRangeFilter(null); setTimeFilter(null); }}
                     style={styles.filterFullMenuReset}
                   >
                     초기화
@@ -2960,6 +2967,10 @@ const styles = {
   filterFullMenuClose: { border: "none", background: "transparent", color: COLOR.inkSoft, fontSize: 15, cursor: "pointer", padding: 2 },
   filterFullMenuGrid: { display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 14 },
   filterFullMenuReset: { marginTop: 12, width: "100%", padding: "10px 0", borderRadius: 10, border: "none", background: "transparent", color: COLOR.inkSoft, fontSize: 12.5, textDecoration: "underline", cursor: "pointer" },
+  timeFilterPopover: { position: "absolute", top: "calc(100% + 6px)", left: 16, right: 16, zIndex: 20, padding: 14, borderRadius: 16, border: `1px solid ${COLOR.borderSoft}`, background: COLOR.surface, boxShadow: "0 10px 26px rgba(38,36,31,0.16)", animation: "cf-modal-up 0.16s ease" },
+  timeFilterLabel: { display: "flex", flexDirection: "column", gap: 8, color: COLOR.ink, fontSize: 12.5, fontWeight: 600 },
+  timeFilterSelect: { minHeight: 44, padding: "0 10px", borderRadius: 10, border: `1px solid ${COLOR.border}`, background: COLOR.surface, color: COLOR.ink, fontSize: 14, fontWeight: 500 },
+  timeFilterResetBtn: { marginTop: 10, width: "100%", padding: "10px 0", borderRadius: 10, border: "none", background: "transparent", color: COLOR.inkSoft, fontSize: 12.5, textDecoration: "underline", cursor: "pointer" },
   filterChip: { display: "flex", alignItems: "center", gap: 6, padding: "10px 16px", borderRadius: 999, border: "none", background: "#FFFFFF", color: COLOR.ink, fontSize: 13, fontWeight: 500, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0, scrollSnapAlign: "start", boxShadow: "0 3px 10px rgba(38,36,31,0.12)" },
   filterChipActive: { background: COLOR.accent, borderColor: COLOR.accent, color: "#FFFDF8" },
   resetBtn: { padding: "8px 10px", borderRadius: 999, border: "none", background: "transparent", color: COLOR.inkSoft, fontSize: 12, textDecoration: "underline", cursor: "pointer", flexShrink: 0 },
