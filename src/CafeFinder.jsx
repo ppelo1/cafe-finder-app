@@ -204,6 +204,31 @@ function isOpenNow(hoursStr, weeklyHours) {
   return cur >= start || cur < end; // 자정을 넘기는 영업시간
 }
 
+/* 오늘 마감 시각을 자정(0시) 기준 분 단위로 반환 (24시간 영업이면 Infinity, 알 수 없으면 null) */
+function closingMinutesToday(cafe) {
+  let hoursStr = cafe.hours;
+  if (cafe.weeklyHours) {
+    const today = cafe.weeklyHours[todayKey()];
+    if (!today || today.closed) return null;
+    hoursStr = `${today.open} - ${today.close}`;
+  }
+  if (!hoursStr) return null;
+  if (hoursStr.includes("24시간")) return Infinity;
+  const m = hoursStr.match(/(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})/);
+  if (!m) return null;
+  const start = Number(m[1]) * 60 + Number(m[2]);
+  const end = Number(m[3]) * 60 + Number(m[4]);
+  if (start === end) return Infinity; // 24시간 영업으로 표기된 경우
+  return end <= start ? end + 24 * 60 : end; // 자정을 넘기는 영업시간 보정
+}
+
+const CLOSING_HOUR_OPTIONS = [
+  { value: 21, label: "21시 이후" },
+  { value: 22, label: "22시 이후" },
+  { value: 23, label: "23시 이후" },
+  { value: 24, label: "자정 이후" },
+];
+
 /* ---------- 아이콘 ---------- */
 /* 대표님이 보내주신 아이콘 PNG를 currentColor로 물들일 수 있게 mask-image로 렌더링 */
 function MaskIcon({ src, size = 16, color = "currentColor" }) {
@@ -965,6 +990,7 @@ function CafeFinderInner() {
   const [query, setQuery] = useState("");
   const [openNowOnly, setOpenNowOnly] = useState(false);
   const [outletRangeFilter, setOutletRangeFilter] = useState(null);
+  const [closingHourFilter, setClosingHourFilter] = useState(null);
   const [showFilterPanel, setShowFilterPanel] = useState(false);
   const [mapNoticeDismissed, setMapNoticeDismissed] = useState(false);
   const [mapViewport, setMapViewport] = useState(null);
@@ -1003,7 +1029,11 @@ function CafeFinderInner() {
     setOutletRangeFilter((current) => current === range ? null : range);
   };
 
-  const hiddenFiltersActive = active.has("cute") || active.has("parking") || !!outletRangeFilter;
+  const toggleClosingHourFilter = (hour) => {
+    setClosingHourFilter((current) => current === hour ? null : hour);
+  };
+
+  const hiddenFiltersActive = active.has("cute") || active.has("parking") || !!outletRangeFilter || !!closingHourFilter;
 
   const handleFilterMouseDown = (event) => {
     if (event.button !== 0 || !filterBarRef.current) return;
@@ -1045,7 +1075,14 @@ function CafeFinderInner() {
         : c.outletRange === outletRangeFilter);
     }
     if (openNowOnly) {
-      list = list.filter((c) => isOpenNow(c.hours) === true);
+      list = list.filter((c) => isOpenNow(c.hours, c.weeklyHours) === true);
+    }
+    if (closingHourFilter) {
+      const threshold = closingHourFilter * 60;
+      list = list.filter((c) => {
+        const closing = closingMinutesToday(c);
+        return closing !== null && closing >= threshold;
+      });
     }
     const q = query.trim().toLowerCase();
     if (q) {
@@ -1057,7 +1094,7 @@ function CafeFinderInner() {
       list = list.filter((c) => Number(c.id) in favorites);
     }
     return list;
-  }, [active, cafes, query, openNowOnly, outletRangeFilter, favoritesOnly, favorites]);
+  }, [active, cafes, query, openNowOnly, closingHourFilter, outletRangeFilter, favoritesOnly, favorites]);
 
   const mapCafes = useMemo(() => {
     // 즐겨찾기 보기일 땐 흩어져 있어도 다 보이도록 뷰포트 필터를 건너뛴다.
@@ -1364,9 +1401,16 @@ function CafeFinderInner() {
                     <button key={value} type="button" style={{ ...styles.outletFilterOption, ...(outletRangeFilter === value ? styles.outletFilterOptionActive : {}) }} onClick={() => toggleOutletRangeFilter(value)}>{label}</button>
                   ))}
                 </div>
-                {(active.size > 0 || openNowOnly || outletRangeFilter) && (
+                <strong style={styles.outletFilterTitle}>마감 시간</strong>
+                <div style={styles.outletFilterOptions}>
+                  <button type="button" style={{ ...styles.outletFilterOption, ...(closingHourFilter === null ? styles.outletFilterOptionActive : {}) }} onClick={() => setClosingHourFilter(null)}>전체</button>
+                  {CLOSING_HOUR_OPTIONS.map(({ value, label }) => (
+                    <button key={value} type="button" style={{ ...styles.outletFilterOption, ...(closingHourFilter === value ? styles.outletFilterOptionActive : {}) }} onClick={() => toggleClosingHourFilter(value)}>{label}</button>
+                  ))}
+                </div>
+                {(active.size > 0 || openNowOnly || outletRangeFilter || closingHourFilter) && (
                   <button
-                    onClick={() => { setActive(new Set()); setOpenNowOnly(false); setOutletRangeFilter(null); }}
+                    onClick={() => { setActive(new Set()); setOpenNowOnly(false); setOutletRangeFilter(null); setClosingHourFilter(null); }}
                     style={styles.filterFullMenuReset}
                   >
                     초기화
