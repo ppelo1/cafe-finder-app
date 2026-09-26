@@ -215,7 +215,7 @@ const TIME_FILTER_OPTIONS = [
   { value: "21:00", label: "오후 9시" },
   { value: "22:00", label: "오후 10시" },
   { value: "23:00", label: "오후 11시" },
-  { value: "00:00", label: "자정 (12시)" },
+  { value: "23:59", label: "24시 (자정)" },
 ];
 
 /* ---------- 아이콘 ---------- */
