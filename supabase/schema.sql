@@ -50,8 +50,10 @@ alter table favorites enable row level security;
 drop policy if exists "카페 목록은 누구나 조회"   on cafes;
 drop policy if exists "로그인한 사람만 카페 등록"  on cafes;
 drop policy if exists "누구나 카페 등록"          on cafes;
+drop policy if exists "누구나 카페 수정"          on cafes;
 create policy "카페 목록은 누구나 조회"  on cafes for select using (true);
 create policy "누구나 카페 등록"        on cafes for insert with check (true);
+create policy "누구나 카페 수정"        on cafes for update using (true) with check (true);
 
 drop policy if exists "리뷰는 누구나 조회"        on reviews;
 drop policy if exists "로그인한 사람만 리뷰 작성"  on reviews;
