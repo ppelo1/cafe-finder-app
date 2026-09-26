@@ -3134,7 +3134,7 @@ const styles = {
   detailInfoGridItem: { padding: 10, background: COLOR.surface },
   detailInfoLabel: { display: "flex", alignItems: "center", gap: 7, color: COLOR.inkSoft, fontSize: 11.5 },
   reviewSection: { borderTop: `1px solid ${COLOR.border}`, paddingTop: 15 },
-  detailTabs: { display: "flex", gap: 4, marginBottom: 15, borderBottom: `1px solid ${COLOR.border}` },
+  detailTabs: { display: "flex", gap: 4, marginBottom: 15 },
   detailTab: { flex: 1, minHeight: 44, padding: "0 8px", border: "none", borderBottom: "2px solid transparent", background: "transparent", color: COLOR.inkSoft, fontSize: 13, fontWeight: 600, cursor: "pointer", touchAction: "manipulation" },
   detailTabActive: { borderBottomColor: COLOR.ink, color: COLOR.ink },
   reviewSectionHeader: { display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8, marginBottom: 9 },
