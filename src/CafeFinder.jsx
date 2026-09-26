@@ -179,6 +179,31 @@ function weeklyHoursSummary(weeklyHours) {
   return `${openDays.map(({ label }) => label).join(",")} ${sameHours ? `${first.open} - ${first.close}` : "영업"}`;
 }
 
+/* 카페 수정 폼을 열 때 기존 hours/weeklyHours로부터 폼 상태를 역산한다 */
+function cafeToFormWeeklyHours(cafe) {
+  if (cafe.weeklyHours) {
+    const weeklyHours = { ...DEFAULT_WEEKLY_HOURS, ...cafe.weeklyHours };
+    const openDays = DAYS.filter(({ key }) => !weeklyHours[key]?.closed);
+    const first = openDays[0] ? weeklyHours[openDays[0].key] : DEFAULT_WEEKLY_HOURS.mon;
+    const sameHours = openDays.every(({ key }) => weeklyHours[key].open === first.open && weeklyHours[key].close === first.close);
+    return { weeklyHours, commonOpen: first.open, commonClose: first.close, useIndividualHours: !sameHours };
+  }
+  if (cafe.hours === "24시간") {
+    return {
+      weeklyHours: Object.fromEntries(DAYS.map(({ key }) => [key, { closed: false, open: "00:00", close: "24:00" }])),
+      commonOpen: "00:00", commonClose: "24:00", useIndividualHours: false,
+    };
+  }
+  const m = (cafe.hours || "").match(/(\d{1,2}:\d{2})\s*-\s*(\d{1,2}:\d{2})/);
+  if (m) {
+    return {
+      weeklyHours: Object.fromEntries(DAYS.map(({ key }) => [key, { closed: false, open: m[1], close: m[2] }])),
+      commonOpen: m[1], commonClose: m[2], useIndividualHours: false,
+    };
+  }
+  return { weeklyHours: DEFAULT_WEEKLY_HOURS, commonOpen: "09:00", commonClose: "22:00", useIndividualHours: false };
+}
+
 function todayKey() {
   return DAYS[(new Date().getDay() + 6) % 7].key;
 }
@@ -815,6 +840,45 @@ function useCafes(user) {
     [useLocal, user]
   );
 
+  const updateCafe = useCallback(
+    async (cafeId, cafe) => {
+      if (useLocal) {
+        const local = { ...cafes.find((c) => c.id === cafeId), ...cafe, id: cafeId };
+        setCafes((prev) => prev.map((c) => (c.id === cafeId ? local : c)));
+        return local;
+      }
+      const { data, error } = await supabase
+        .from("cafes")
+        .update({
+          name: cafe.name,
+          dong: cafe.dong || "",
+          address: cafe.address,
+          phone: cafe.phone || "",
+          naver_name: cafe.naverName || "",
+          naver_link: cafe.naverLink || "",
+          tags: cafe.tags || {},
+          outlet_range: cafe.outletRange || "none",
+          seats: Number(cafe.seats) || 0,
+          hours: cafe.hours || "정보 없음",
+          weekly_hours: cafe.weeklyHours || null,
+          description: cafe.desc || "",
+          lat: cafe.lat,
+          lng: cafe.lng,
+        })
+        .eq("id", cafeId)
+        .select(CAFE_SELECT)
+        .single();
+      if (error) {
+        console.warn("카페 수정 실패:", error.message);
+        throw error;
+      }
+      const saved = rowToCafe(data);
+      setCafes((prev) => prev.map((c) => (c.id === cafeId ? saved : c)));
+      return saved;
+    },
+    [useLocal, cafes]
+  );
+
   const addReview = useCallback(
     async (cafeId, review) => {
       const nest = (saved) =>
@@ -859,7 +923,7 @@ function useCafes(user) {
     [useLocal, user]
   );
 
-  return { cafes, addCafe, addReview };
+  return { cafes, addCafe, updateCafe, addReview };
 }
 
 /* 네이버 지오코딩 - 주소 문자열을 좌표로 변환 (submodules=geocoder 필요) */
@@ -966,6 +1030,7 @@ function CafeFinderInner() {
   const [detailCafeId, setDetailCafeId] = useState(null);
   const [hovered, setHovered] = useState(null);
   const [showForm, setShowForm] = useState(false);
+  const [editingCafeId, setEditingCafeId] = useState(null);
   const [pickedLoc, setPickedLoc] = useState(null); // {lat,lng} 지도 클릭으로 지정
   const cardRefs = useRef({});
   const listScrollRef = useRef(null);
@@ -991,7 +1056,7 @@ function CafeFinderInner() {
   const { user, signIn, signOut, authError, clearAuthError } = useAuth();
   const { favorites, toggleFavorite } = useFavorites(user);
   const { memos: cafeMemos, updateMemo: updateCafeMemo } = useCafeMemos();
-  const { cafes, addCafe, addReview: addReviewToStore } = useCafes(user);
+  const { cafes, addCafe, updateCafe, addReview: addReviewToStore } = useCafes(user);
 
   const requireLogin = () => setShowLogin(true);
 
@@ -1181,14 +1246,22 @@ function CafeFinderInner() {
       lng: loc.lng,
     };
     try {
-      const saved = await addCafe(draft);
+      const saved = editingCafeId ? await updateCafe(editingCafeId, draft) : await addCafe(draft);
       selectCafe(saved.id);
     } catch (e) {
-      alert("카페 등록에 실패했어요. 잠시 후 다시 시도해주세요.");
+      alert(editingCafeId ? "카페 정보 수정에 실패했어요. 잠시 후 다시 시도해주세요." : "카페 등록에 실패했어요. 잠시 후 다시 시도해주세요.");
       return;
     }
     setShowForm(false);
     setPickedLoc(null);
+    setEditingCafeId(null);
+  };
+
+  const startEditCafe = (cafe) => {
+    setDetailCafeId(null);
+    setEditingCafeId(cafe.id);
+    setPickedLoc({ lat: cafe.lat, lng: cafe.lng });
+    setShowForm(true);
   };
 
   const addReview = async (cafeId, review) => {
@@ -1500,7 +1573,7 @@ function CafeFinderInner() {
           </button>
         )}
 
-        <button style={styles.addBtnFloating} onClick={() => { setPickedLoc(null); setShowForm(true); }}>
+        <button style={styles.addBtnFloating} onClick={() => { setPickedLoc(null); setEditingCafeId(null); setShowForm(true); }}>
           <img src={registerIconImg} alt="" aria-hidden="true" style={styles.addBtnIcon} />
           <span style={styles.addBtnLabel}>카페 등록</span>
         </button>
@@ -1517,6 +1590,7 @@ function CafeFinderInner() {
           onToggleFavorite={toggleFavorite}
           onUpdateMemo={updateCafeMemo}
           onRequireLogin={requireLogin}
+          onEdit={startEditCafe}
         />
       )}
 
@@ -1531,7 +1605,8 @@ function CafeFinderInner() {
       {showForm && (
         <CafeForm
           pickedLoc={pickedLoc}
-          onCancel={() => { setShowForm(false); setPickedLoc(null); }}
+          initialCafe={editingCafeId ? cafes.find((c) => c.id === editingCafeId) : null}
+          onCancel={() => { setShowForm(false); setPickedLoc(null); setEditingCafeId(null); }}
           onSubmit={submitCafe}
           mapStatus={mapStatus}
           onSetLoc={(loc) => setPickedLoc(loc)}
@@ -1542,6 +1617,13 @@ function CafeFinderInner() {
   );
 }
 
+function PencilIcon({ size = 13, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
+    </svg>
+  );
+}
 function CopyIcon({ size = 13 }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -1663,7 +1745,7 @@ function LoginModal({ onClose, onSignIn, reason, errorText }) {
   );
 }
 
-function CafeDetailModal({ cafe, onClose, onAddReview, isFavorite, cafeMemo = "", isLoggedIn, onToggleFavorite, onUpdateMemo, onRequireLogin }) {
+function CafeDetailModal({ cafe, onClose, onAddReview, isFavorite, cafeMemo = "", isLoggedIn, onToggleFavorite, onUpdateMemo, onRequireLogin, onEdit }) {
   const openState = isOpenNow(cafe.hours, cafe.weeklyHours);
   const [memoDraft, setMemoDraft] = useState(cafeMemo);
   useEffect(() => { setMemoDraft(cafeMemo); }, [cafeMemo, cafe.id]);
@@ -1904,7 +1986,13 @@ function CafeDetailModal({ cafe, onClose, onAddReview, isFavorite, cafeMemo = ""
             <h2 style={styles.detailTitle}>{cafe.name}</h2>
             <p style={styles.detailReviewCount}>리뷰 {cafe.reviews?.length || 0}개</p>
           </div>
-          <button type="button" style={styles.detailCloseBtn} onClick={onClose} aria-label="상세 정보 닫기">×</button>
+          <div style={styles.detailHeaderActions}>
+            <button type="button" style={styles.detailEditBtn} onClick={() => onEdit(cafe)} aria-label="카페 정보 수정">
+              <PencilIcon size={15} />
+              수정
+            </button>
+            <button type="button" style={styles.detailCloseBtn} onClick={onClose} aria-label="상세 정보 닫기">×</button>
+          </div>
         </div>
         <button
           type="button"
@@ -2153,21 +2241,25 @@ function TimePicker({ value, onChange, label }) {
 }
 
 /* ---------- 등록 폼 ---------- */
-function CafeForm({ pickedLoc, onCancel, onSubmit, mapStatus, onSetLoc }) {
-  const [name, setName] = useState("");
-  const [naverPlace, setNaverPlace] = useState(null);
-  const [address, setAddress] = useState("");
-  const [seats, setSeats] = useState("");
-  const [weeklyHours, setWeeklyHours] = useState(DEFAULT_WEEKLY_HOURS);
-  const [commonOpen, setCommonOpen] = useState("09:00");
-  const [commonClose, setCommonClose] = useState("22:00");
-  const [useIndividualHours, setUseIndividualHours] = useState(false);
+function CafeForm({ pickedLoc, initialCafe, onCancel, onSubmit, mapStatus, onSetLoc }) {
+  const isEditing = !!initialCafe;
+  const [name, setName] = useState(() => initialCafe?.name || "");
+  const [naverPlace, setNaverPlace] = useState(() => (initialCafe?.naverName || initialCafe?.naverLink)
+    ? { name: initialCafe.naverName || "", link: initialCafe.naverLink || "", phone: initialCafe.phone || "", address: initialCafe.address || "" }
+    : null);
+  const [address, setAddress] = useState(() => initialCafe?.address || "");
+  const [seats, setSeats] = useState(() => (initialCafe?.seats ? String(initialCafe.seats) : ""));
+  const initialHours = useMemo(() => cafeToFormWeeklyHours(initialCafe || {}), [initialCafe]);
+  const [weeklyHours, setWeeklyHours] = useState(() => initialHours.weeklyHours);
+  const [commonOpen, setCommonOpen] = useState(() => initialHours.commonOpen);
+  const [commonClose, setCommonClose] = useState(() => initialHours.commonClose);
+  const [useIndividualHours, setUseIndividualHours] = useState(() => initialHours.useIndividualHours);
   const [showSchedule, setShowSchedule] = useState(false);
   const [schedulePasteText, setSchedulePasteText] = useState("");
   const [schedulePasteMessage, setSchedulePasteMessage] = useState("");
-  const [desc, setDesc] = useState("");
-  const [outletRange, setOutletRange] = useState(null);
-  const [tags, setTags] = useState({ outlet: false, large: false, interior: false, parking: false, cute: false });
+  const [desc, setDesc] = useState(() => initialCafe?.desc || "");
+  const [outletRange, setOutletRange] = useState(() => initialCafe?.outletRange || null);
+  const [tags, setTags] = useState(() => ({ outlet: false, large: false, interior: false, parking: false, cute: false, ...initialCafe?.tags }));
   const [geocoding, setGeocoding] = useState(false);
   const [geocodeFailed, setGeocodeFailed] = useState(false);
   const [placeQuery, setPlaceQuery] = useState("");
@@ -2277,7 +2369,7 @@ function CafeForm({ pickedLoc, onCancel, onSubmit, mapStatus, onSetLoc }) {
   return (
     <div style={styles.modalOverlay} onClick={onCancel}>
       <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
-        <h2 style={styles.modalTitle}>카페 등록하기</h2>
+        <h2 style={styles.modalTitle}>{isEditing ? "카페 정보 수정하기" : "카페 등록하기"}</h2>
         <p style={styles.modalHint}>
           {geocoding
             ? "주소로 위치를 찾는 중이에요..."
@@ -2464,9 +2556,9 @@ function CafeForm({ pickedLoc, onCancel, onSubmit, mapStatus, onSetLoc }) {
           <button
             style={{ ...styles.submitBtn, opacity: canSubmit ? 1 : 0.45, cursor: canSubmit ? "pointer" : "not-allowed" }}
             disabled={!canSubmit}
-            onClick={() => canSubmit && onSubmit({ name, dong: inferDong(address, placeQuery.split(" ")[0]), address, seats, weeklyHours: getSubmittedWeeklyHours(), desc, tags: { ...tags, outlet: outletRange !== "none" }, outletRange, naverName: naverPlace?.name, naverLink: naverPlace?.link, phone: naverPlace?.phone })}
+            onClick={() => canSubmit && onSubmit({ name, dong: inferDong(address, placeQuery.split(" ")[0] || initialCafe?.dong), address, seats, weeklyHours: getSubmittedWeeklyHours(), desc, tags: { ...tags, outlet: outletRange !== "none" }, outletRange, naverName: naverPlace?.name, naverLink: naverPlace?.link, phone: naverPlace?.phone })}
           >
-            등록하기
+            {isEditing ? "수정 완료" : "등록하기"}
           </button>
         </div>
       </div>
@@ -3010,6 +3102,8 @@ const styles = {
   detailTitle: { margin: "3px 0 0", fontFamily: "'Noto Serif KR', serif", fontSize: 22 },
   detailReviewCount: { margin: "4px 0 0", color: COLOR.inkSoft, fontSize: 12 },
   detailCloseBtn: { width: 40, height: 40, border: "none", borderRadius: 10, background: COLOR.bg, color: COLOR.ink, fontSize: 26, lineHeight: 1, cursor: "pointer" },
+  detailHeaderActions: { display: "flex", alignItems: "center", gap: 8, flexShrink: 0 },
+  detailEditBtn: { display: "flex", alignItems: "center", gap: 5, height: 40, padding: "0 12px", border: `1px solid ${COLOR.border}`, borderRadius: 10, background: COLOR.surface, color: COLOR.inkSoft, fontSize: 12.5, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" },
   detailFabClose: {
     position: "fixed",
     right: 18,
