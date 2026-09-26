@@ -1749,7 +1749,7 @@ function CafeDetailModal({ cafe, onClose, onAddReview, isFavorite, cafeMemo = ""
   const openState = isOpenNow(cafe.hours, cafe.weeklyHours);
   const [memoDraft, setMemoDraft] = useState(cafeMemo);
   useEffect(() => { setMemoDraft(cafeMemo); }, [cafeMemo, cafe.id]);
-  const naverMapUrl = `https://map.naver.com/v5/?c=${cafe.lng},${cafe.lat},15,0,0,0,dh`;
+  const naverMapUrl = `https://map.naver.com/p/search/${encodeURIComponent(`${cafe.naverName || cafe.name} ${cafe.address}`)}`;
   const [addrCopied, setAddrCopied] = useState(false);
   const copyAddress = async () => {
     const text = `${cafe.dong ? cafe.dong + " " : ""}${cafe.address}`.trim();
