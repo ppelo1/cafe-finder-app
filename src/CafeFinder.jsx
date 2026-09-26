@@ -995,6 +995,15 @@ function CafeFinderInner() {
 
   const requireLogin = () => setShowLogin(true);
 
+  // 랜딩페이지 등에서 ?q=연남동 처럼 검색어를 넘겨주면 진입 시 바로 검색된 상태로 시작한다
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search).get("q");
+    if (q) {
+      setQueryInput(q);
+      setQuery(q);
+    }
+  }, []);
+
   // OAuth 콜백이 에러로 돌아오면 로그인 팝업을 다시 띄우고 이유를 보여준다
   useEffect(() => {
     if (authError) setShowLogin(true);
