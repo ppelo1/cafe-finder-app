@@ -979,8 +979,8 @@ function CafeFinderInner() {
   const [query, setQuery] = useState("");
   const [openNowOnly, setOpenNowOnly] = useState(false);
   const [timeFilter, setTimeFilter] = useState(null); // "HH:MM" | null
-  const [showTimePicker, setShowTimePicker] = useState(false);
   const [outletRangeFilter, setOutletRangeFilter] = useState(null);
+  const [showOutletPicker, setShowOutletPicker] = useState(false);
   const [showFilterPanel, setShowFilterPanel] = useState(false);
   const [mapNoticeDismissed, setMapNoticeDismissed] = useState(false);
   const [mapViewport, setMapViewport] = useState(null);
@@ -1019,7 +1019,7 @@ function CafeFinderInner() {
     setOutletRangeFilter((current) => current === range ? null : range);
   };
 
-  const hiddenFiltersActive = active.has("cute") || active.has("parking") || !!outletRangeFilter;
+  const hiddenFiltersActive = active.has("cute") || active.has("parking") || openNowOnly || !!timeFilter;
 
   const handleFilterMouseDown = (event) => {
     if (event.button !== 0 || !filterBarRef.current) return;
@@ -1322,19 +1322,12 @@ function CafeFinderInner() {
               onClick={handleFilterClick}
             >
               <button
-                onClick={() => setOpenNowOnly((v) => !v)}
-                style={{ ...styles.filterChip, ...(openNowOnly ? styles.filterChipActive : {}) }}
+                onClick={() => { setShowOutletPicker((v) => !v); setShowFilterPanel(false); }}
+                style={{ ...styles.filterChip, ...(outletRangeFilter ? styles.filterChipActive : {}) }}
+                aria-expanded={showOutletPicker}
               >
-                <ClockIcon size={15} color={openNowOnly ? "#FFFDF8" : "#5B5648"} />
-                지금 영업중
-              </button>
-              <button
-                onClick={() => setShowTimePicker((v) => !v)}
-                style={{ ...styles.filterChip, ...(timeFilter ? styles.filterChipActive : {}) }}
-                aria-expanded={showTimePicker}
-              >
-                <ClockIcon size={15} color={timeFilter ? "#FFFDF8" : "#5B5648"} />
-                {timeFilter ? TIME_FILTER_OPTIONS.find((o) => o.value === timeFilter)?.label ?? "영업시간" : "영업시간"}
+                <OutletIcon size={15} color={outletRangeFilter ? "#FFFDF8" : "#5B5648"} />
+                {outletRangeFilter ? outletRangeLabel({ outletRange: outletRangeFilter }) : "콘센트"}
               </button>
               {FILTERS.filter(({ key }) => key === "large" || key === "interior").map(({ key, label, icon: Icon }) => {
                 const isActive = active.has(key);
@@ -1350,7 +1343,7 @@ function CafeFinderInner() {
                 );
               })}
               <button
-                onClick={() => setShowFilterPanel((value) => !value)}
+                onClick={() => { setShowFilterPanel((value) => !value); setShowOutletPicker(false); }}
                 style={{ ...styles.filterSettingsChip, ...(hiddenFiltersActive ? styles.filterChipActive : {}) }}
                 aria-expanded={showFilterPanel}
                 aria-label="필터 설정"
@@ -1358,23 +1351,17 @@ function CafeFinderInner() {
                 <SlidersIcon size={16} color={hiddenFiltersActive ? "#FFFDF8" : "#5B5648"} />
               </button>
             </div>
-            {showTimePicker && (
+            {showOutletPicker && (
               <div style={styles.timeFilterPopover} onClick={(e) => e.stopPropagation()}>
-                <label style={styles.timeFilterLabel}>
-                  이 시간에 영업 중인 카페만 보기
-                  <select
-                    style={styles.timeFilterSelect}
-                    value={timeFilter || ""}
-                    onChange={(e) => setTimeFilter(e.target.value || null)}
-                  >
-                    <option value="">선택 안 함</option>
-                    {TIME_FILTER_OPTIONS.map(({ value, label }) => (
-                      <option key={value} value={value}>{label}</option>
-                    ))}
-                  </select>
-                </label>
-                {timeFilter && (
-                  <button type="button" style={styles.timeFilterResetBtn} onClick={() => setTimeFilter(null)}>
+                <strong style={styles.outletFilterTitle}>콘센트 있는 좌석 수</strong>
+                <div style={styles.outletFilterOptions}>
+                  <button type="button" style={{ ...styles.outletFilterOption, ...(outletRangeFilter === "any" ? styles.outletFilterOptionActive : {}) }} onClick={() => toggleOutletRangeFilter("any")}>전체</button>
+                  {OUTLET_RANGES.filter(({ value }) => !["none", "unknown"].includes(value)).map(({ value, label }) => (
+                    <button key={value} type="button" style={{ ...styles.outletFilterOption, ...(outletRangeFilter === value ? styles.outletFilterOptionActive : {}) }} onClick={() => toggleOutletRangeFilter(value)}>{label}</button>
+                  ))}
+                </div>
+                {outletRangeFilter && (
+                  <button type="button" style={styles.timeFilterResetBtn} onClick={() => setOutletRangeFilter(null)}>
                     초기화
                   </button>
                 )}
@@ -1386,6 +1373,7 @@ function CafeFinderInner() {
                   <strong>필터</strong>
                   <button type="button" style={styles.filterFullMenuClose} onClick={() => setShowFilterPanel(false)} aria-label="필터 패널 닫기">✕</button>
                 </div>
+                <strong style={styles.outletFilterTitle}>영업시간</strong>
                 <div style={styles.filterFullMenuGrid}>
                   <button
                     onClick={() => setOpenNowOnly((v) => !v)}
@@ -1394,6 +1382,20 @@ function CafeFinderInner() {
                     <ClockIcon size={15} color={openNowOnly ? "#FFFDF8" : "#5B5648"} />
                     지금 영업중
                   </button>
+                </div>
+                <select
+                  style={{ ...styles.timeFilterSelect, width: "100%", marginBottom: 18 }}
+                  value={timeFilter || ""}
+                  onChange={(e) => setTimeFilter(e.target.value || null)}
+                  aria-label="특정 시간에 영업 중인 카페만 보기"
+                >
+                  <option value="">이 시간에 영업 중: 선택 안 함</option>
+                  {TIME_FILTER_OPTIONS.map(({ value, label }) => (
+                    <option key={value} value={value}>{label}</option>
+                  ))}
+                </select>
+                <strong style={styles.outletFilterTitle}>카페 특징</strong>
+                <div style={styles.filterFullMenuGrid}>
                   {FILTERS.filter(({ key }) => key !== "outlet").map(({ key, label, icon: Icon }) => {
                     const isActive = active.has(key);
                     return (
@@ -1407,13 +1409,6 @@ function CafeFinderInner() {
                       </button>
                     );
                   })}
-                </div>
-                <strong style={styles.outletFilterTitle}>콘센트 있는 좌석 수</strong>
-                <div style={styles.outletFilterOptions}>
-                  <button type="button" style={{ ...styles.outletFilterOption, ...(outletRangeFilter === "any" ? styles.outletFilterOptionActive : {}) }} onClick={() => toggleOutletRangeFilter("any")}>전체</button>
-                  {OUTLET_RANGES.filter(({ value }) => !["none", "unknown"].includes(value)).map(({ value, label }) => (
-                    <button key={value} type="button" style={{ ...styles.outletFilterOption, ...(outletRangeFilter === value ? styles.outletFilterOptionActive : {}) }} onClick={() => toggleOutletRangeFilter(value)}>{label}</button>
-                  ))}
                 </div>
                 {(active.size > 0 || openNowOnly || outletRangeFilter || timeFilter) && (
                   <button
@@ -2968,7 +2963,6 @@ const styles = {
   filterFullMenuGrid: { display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 14 },
   filterFullMenuReset: { marginTop: 12, width: "100%", padding: "10px 0", borderRadius: 10, border: "none", background: "transparent", color: COLOR.inkSoft, fontSize: 12.5, textDecoration: "underline", cursor: "pointer" },
   timeFilterPopover: { position: "absolute", top: "calc(100% + 6px)", left: 16, right: 16, zIndex: 20, padding: 14, borderRadius: 16, border: `1px solid ${COLOR.borderSoft}`, background: COLOR.surface, boxShadow: "0 10px 26px rgba(38,36,31,0.16)", animation: "cf-modal-up 0.16s ease" },
-  timeFilterLabel: { display: "flex", flexDirection: "column", gap: 8, color: COLOR.ink, fontSize: 12.5, fontWeight: 600 },
   timeFilterSelect: { minHeight: 44, padding: "0 10px", borderRadius: 10, border: `1px solid ${COLOR.border}`, background: COLOR.surface, color: COLOR.ink, fontSize: 14, fontWeight: 500 },
   timeFilterResetBtn: { marginTop: 10, width: "100%", padding: "10px 0", borderRadius: 10, border: "none", background: "transparent", color: COLOR.inkSoft, fontSize: 12.5, textDecoration: "underline", cursor: "pointer" },
   filterChip: { display: "flex", alignItems: "center", gap: 6, padding: "10px 16px", borderRadius: 999, border: "none", background: "#FFFFFF", color: COLOR.ink, fontSize: 13, fontWeight: 500, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0, scrollSnapAlign: "start", boxShadow: "0 3px 10px rgba(38,36,31,0.12)" },
