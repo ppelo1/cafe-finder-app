@@ -1036,6 +1036,7 @@ function CafeFinderInner() {
   const listScrollRef = useRef(null);
   const savedListScrollRef = useRef(0);
   const filterBarRef = useRef(null);
+  const filterWrapRef = useRef(null);
   const filterDragRef = useRef({ active: false, startX: 0, startScrollLeft: 0, moved: false });
   const overlayRef = useRef(null);
   const [overlayHeight, setOverlayHeight] = useState(168);
@@ -1094,6 +1095,23 @@ function CafeFinderInner() {
   };
 
   const hiddenFiltersActive = active.has("cute") || active.has("parking") || openNowOnly || !!timeFilter;
+
+  // 필터 팝업(콘센트/더보기)이 열려있을 때 바깥을 누르면 닫는다
+  useEffect(() => {
+    if (!showOutletPicker && !showFilterPanel) return;
+    const handleOutsideClick = (event) => {
+      if (filterWrapRef.current && !filterWrapRef.current.contains(event.target)) {
+        setShowOutletPicker(false);
+        setShowFilterPanel(false);
+      }
+    };
+    document.addEventListener("mousedown", handleOutsideClick);
+    document.addEventListener("touchstart", handleOutsideClick);
+    return () => {
+      document.removeEventListener("mousedown", handleOutsideClick);
+      document.removeEventListener("touchstart", handleOutsideClick);
+    };
+  }, [showOutletPicker, showFilterPanel]);
 
   const handleFilterMouseDown = (event) => {
     if (event.button !== 0 || !filterBarRef.current) return;
@@ -1392,7 +1410,7 @@ function CafeFinderInner() {
             )}
           </div>
 
-          <div style={styles.filterBarWrap}>
+          <div style={styles.filterBarWrap} ref={filterWrapRef}>
             <div
               ref={filterBarRef}
               style={styles.filterBar}
