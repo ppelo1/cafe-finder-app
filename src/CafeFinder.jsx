@@ -120,6 +120,13 @@ function outletRangeLabel(cafe) {
   return range ? `콘센트 ${range.label}` : "콘센트";
 }
 
+/* 태그 배지 문구: 콘센트는 좌석 범위, 주차는 대수까지 보여준다 */
+function tagBadgeLabel(cafe, key, label) {
+  if (key === "outlet") return outletRangeLabel(cafe);
+  if (key === "parking" && cafe.parkingSpots) return `${label} ${cafe.parkingSpots}대`;
+  return label;
+}
+
 function inferDong(address, fallback = "") {
   return address.match(/[가-힣]+동/)?.[0] || fallback;
 }
@@ -726,7 +733,7 @@ function useCafeMemos() {
 /* ---------- 카페 + 리뷰 (Supabase 공유 저장, 없으면 localStorage) ----------
    - Supabase 로그인 상태: cafes/reviews 테이블 (조회는 누구나, 등록은 로그인)
    - Supabase 미설정 / 로컬 테스트 로그인: localStorage (기기별)                 */
-const CAFE_SELECT = "id, name, dong, address, phone, naver_name, naver_link, tags, outlet_range, seats, rating, hours, weekly_hours, description, lat, lng, reviews(id, rating, text, images, created_at)";
+const CAFE_SELECT = "id, name, dong, address, phone, naver_name, naver_link, tags, outlet_range, parking_spots, parking_note, seats, rating, hours, weekly_hours, description, lat, lng, reviews(id, rating, text, images, created_at)";
 
 function rowToCafe(row) {
   const reviews = (row.reviews || [])
@@ -749,6 +756,8 @@ function rowToCafe(row) {
     naverLink: row.naver_link || "",
     tags: row.tags || {},
     outletRange: row.outlet_range || "none",
+    parkingSpots: row.parking_spots ?? null,
+    parkingNote: row.parking_note || "",
     seats: row.seats || 0,
     rating: row.rating || 0,
     hours: row.hours || "정보 없음",
@@ -819,6 +828,8 @@ function useCafes(user) {
           naver_link: cafe.naverLink || "",
           tags: cafe.tags || {},
           outlet_range: cafe.outletRange || "none",
+          parking_spots: cafe.tags?.parking ? (Number(cafe.parkingSpots) || null) : null,
+          parking_note: cafe.tags?.parking ? (cafe.parkingNote || "").trim() : "",
           seats: Number(cafe.seats) || 0,
           hours: cafe.hours || "정보 없음",
           weekly_hours: cafe.weeklyHours || null,
@@ -858,6 +869,8 @@ function useCafes(user) {
           naver_link: cafe.naverLink || "",
           tags: cafe.tags || {},
           outlet_range: cafe.outletRange || "none",
+          parking_spots: cafe.tags?.parking ? (Number(cafe.parkingSpots) || null) : null,
+          parking_note: cafe.tags?.parking ? (cafe.parkingNote || "").trim() : "",
           seats: Number(cafe.seats) || 0,
           hours: cafe.hours || "정보 없음",
           weekly_hours: cafe.weeklyHours || null,
@@ -1261,6 +1274,8 @@ function CafeFinderInner() {
       hours: weeklyHoursSummary(data.weeklyHours) || "정보 없음",
       weeklyHours: data.weeklyHours,
       desc: data.desc,
+      parkingSpots: data.parkingSpots,
+      parkingNote: data.parkingNote,
       lat: loc.lat,
       lng: loc.lng,
     };
@@ -1330,7 +1345,7 @@ function CafeFinderInner() {
                   {FILTERS.filter((f) => c.tags[f.key]).map(({ key, label, icon: Icon }) => (
                     <span key={key} style={styles.badge}>
                       <Icon size={12} color="#3D6B5F" />
-                      {key === "outlet" ? outletRangeLabel(c) : label}
+                      {tagBadgeLabel(c, key, label)}
                     </span>
                   ))}
                 </div>
@@ -2254,9 +2269,10 @@ function CafeDetailModal({ cafe, onClose, onAddReview, isFavorite, cafeMemo = ""
         </div>
         <div style={styles.badgeRow}>
           {FILTERS.filter((filter) => cafe.tags[filter.key]).map(({ key, label, icon: Icon }) => (
-        <span key={key} style={styles.badge}><Icon size={12} color="#3D6B5F" />{key === "outlet" ? outletRangeLabel(cafe) : label}</span>
+        <span key={key} style={styles.badge}><Icon size={12} color="#3D6B5F" />{tagBadgeLabel(cafe, key, label)}</span>
           ))}
         </div>
+        {cafe.tags?.parking && cafe.parkingNote && <p style={styles.parkingNoteText}>주차 안내 · {cafe.parkingNote}</p>}
         <p style={styles.detailDescription}>{cafe.desc || "등록된 소개가 없습니다."}</p>
         <div style={styles.detailInfoGrid}>
           <div style={styles.infoCard}>
@@ -2467,6 +2483,8 @@ function CafeForm({ pickedLoc, initialCafe, onCancel, onSubmit, mapStatus, onSet
   const [desc, setDesc] = useState(() => initialCafe?.desc || "");
   const [outletRange, setOutletRange] = useState(() => initialCafe?.outletRange || null);
   const [tags, setTags] = useState(() => ({ outlet: false, large: false, interior: false, parking: false, cute: false, ...initialCafe?.tags }));
+  const [parkingSpots, setParkingSpots] = useState(() => (initialCafe?.parkingSpots ? String(initialCafe.parkingSpots) : ""));
+  const [parkingNote, setParkingNote] = useState(() => initialCafe?.parkingNote || "");
   const [geocoding, setGeocoding] = useState(false);
   const [geocodeFailed, setGeocodeFailed] = useState(false);
   const [placeQuery, setPlaceQuery] = useState("");
@@ -2758,12 +2776,25 @@ function CafeForm({ pickedLoc, initialCafe, onCancel, onSubmit, mapStatus, onSet
           ))}
         </div>
 
+        {tags.parking && (
+          <div style={styles.parkingFields}>
+            <label style={styles.parkingFieldLabel}>
+              주차 가능 대수
+              <input style={styles.input} type="number" min="0" inputMode="numeric" value={parkingSpots} onChange={(e) => setParkingSpots(e.target.value)} placeholder="예: 20 (모르면 비워두세요)" />
+            </label>
+            <label style={styles.parkingFieldLabel}>
+              주차 안내
+              <input style={styles.input} value={parkingNote} onChange={(e) => setParkingNote(e.target.value)} maxLength={120} placeholder="예: 건물 지하 주차장, 2시간 무료" />
+            </label>
+          </div>
+        )}
+
         <div style={styles.modalActions}>
           <button style={styles.cancelBtn} onClick={onCancel}>취소</button>
           <button
             style={{ ...styles.submitBtn, opacity: canSubmit ? 1 : 0.45, cursor: canSubmit ? "pointer" : "not-allowed" }}
             disabled={!canSubmit}
-            onClick={() => canSubmit && onSubmit({ name, dong: inferDong(address, placeQuery.split(" ")[0] || initialCafe?.dong), address, seats, weeklyHours: getSubmittedWeeklyHours(), desc, tags: { ...tags, outlet: outletRange !== "none" }, outletRange, naverName: naverPlace?.name, naverLink: naverPlace?.link, phone: naverPlace?.phone })}
+            onClick={() => canSubmit && onSubmit({ name, dong: inferDong(address, placeQuery.split(" ")[0] || initialCafe?.dong), address, seats, weeklyHours: getSubmittedWeeklyHours(), desc, tags: { ...tags, outlet: outletRange !== "none" }, outletRange, parkingSpots: tags.parking ? parkingSpots : "", parkingNote: tags.parking ? parkingNote : "", naverName: naverPlace?.name, naverLink: naverPlace?.link, phone: naverPlace?.phone })}
           >
             {isEditing ? "수정 완료" : "등록하기"}
           </button>
@@ -3309,6 +3340,9 @@ const styles = {
   detailTitle: { margin: "3px 0 0", fontFamily: "'Noto Serif KR', serif", fontSize: 22 },
   detailReviewCount: { margin: "4px 0 0", color: COLOR.inkSoft, fontSize: 12 },
   detailCloseBtn: { width: 40, height: 40, border: "none", borderRadius: 10, background: COLOR.bg, color: COLOR.ink, fontSize: 26, lineHeight: 1, cursor: "pointer" },
+  parkingFields: { display: "flex", flexDirection: "column", gap: 10, margin: "10px 0 4px", padding: "12px 14px", borderRadius: 10, border: `1px solid ${COLOR.border}`, background: "#FAF8F0" },
+  parkingFieldLabel: { display: "flex", flexDirection: "column", gap: 6, color: COLOR.inkSoft, fontSize: 12.5, fontWeight: 600 },
+  parkingNoteText: { margin: "8px 0 0", color: COLOR.teal, fontSize: 13, lineHeight: 1.5 },
   floorHeader: { display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8, marginBottom: 6 },
   floorCount: { color: COLOR.accent, fontSize: 12, fontWeight: 700 },
   floorHint: { margin: "0 0 8px", padding: "8px 12px", borderRadius: 8, background: COLOR.tealSoft, color: COLOR.teal, fontSize: 12.5, lineHeight: 1.45 },

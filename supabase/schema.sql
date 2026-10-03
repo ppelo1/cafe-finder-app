@@ -42,6 +42,10 @@ create table if not exists favorites (
 );
 alter table favorites add column if not exists memo text not null default '';
 
+-- 주차 상세: 가능 대수(모르면 null)와 안내 문구
+alter table cafes add column if not exists parking_spots integer;
+alter table cafes add column if not exists parking_note text default '';
+
 -- 좌석 배치도: 카페당 1장의 사진(압축된 data URL)과 콘센트 위치 핀 목록(x,y는 0~1 비율)
 create table if not exists cafe_floorplans (
   cafe_id bigint primary key references cafes(id) on delete cascade,
