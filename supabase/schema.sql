@@ -42,10 +42,28 @@ create table if not exists favorites (
 );
 alter table favorites add column if not exists memo text not null default '';
 
+-- 좌석 배치도: 카페당 1장의 사진(압축된 data URL)과 콘센트 위치 핀 목록(x,y는 0~1 비율)
+create table if not exists cafe_floorplans (
+  cafe_id bigint primary key references cafes(id) on delete cascade,
+  image text not null,
+  outlets jsonb not null default '[]',
+  updated_at timestamptz not null default now(),
+  constraint cafe_floorplans_image_size check (char_length(image) <= 900000),
+  constraint cafe_floorplans_outlets_array check (jsonb_typeof(outlets) = 'array' and jsonb_array_length(outlets) <= 60)
+);
+
 -- ========== 행 단위 보안(RLS) ==========
 alter table cafes     enable row level security;
 alter table reviews   enable row level security;
 alter table favorites enable row level security;
+alter table cafe_floorplans enable row level security;
+
+drop policy if exists "배치도는 누구나 조회" on cafe_floorplans;
+drop policy if exists "배치도는 누구나 등록" on cafe_floorplans;
+drop policy if exists "배치도는 누구나 수정" on cafe_floorplans;
+create policy "배치도는 누구나 조회" on cafe_floorplans for select using (true);
+create policy "배치도는 누구나 등록" on cafe_floorplans for insert with check (true);
+create policy "배치도는 누구나 수정" on cafe_floorplans for update using (true) with check (true);
 
 drop policy if exists "카페 목록은 누구나 조회"   on cafes;
 drop policy if exists "로그인한 사람만 카페 등록"  on cafes;
