@@ -120,6 +120,13 @@ function outletRangeLabel(cafe) {
   return range ? `콘센트 ${range.label}` : "콘센트";
 }
 
+/* 태그 배지 문구: 콘센트는 좌석 범위, 주차는 대수까지 보여준다 */
+function tagBadgeLabel(cafe, key, label) {
+  if (key === "outlet") return outletRangeLabel(cafe);
+  if (key === "parking" && cafe.parkingSpots) return `${label} ${cafe.parkingSpots}대`;
+  return label;
+}
+
 function inferDong(address, fallback = "") {
   return address.match(/[가-힣]+동/)?.[0] || fallback;
 }
@@ -726,7 +733,7 @@ function useCafeMemos() {
 /* ---------- 카페 + 리뷰 (Supabase 공유 저장, 없으면 localStorage) ----------
    - Supabase 로그인 상태: cafes/reviews 테이블 (조회는 누구나, 등록은 로그인)
    - Supabase 미설정 / 로컬 테스트 로그인: localStorage (기기별)                 */
-const CAFE_SELECT = "id, name, dong, address, phone, naver_name, naver_link, tags, outlet_range, seats, rating, hours, weekly_hours, description, lat, lng, reviews(id, rating, text, images, created_at)";
+const CAFE_SELECT = "id, name, dong, address, phone, naver_name, naver_link, tags, outlet_range, parking_spots, parking_note, seats, rating, hours, weekly_hours, description, lat, lng, reviews(id, rating, text, images, created_at)";
 
 function rowToCafe(row) {
   const reviews = (row.reviews || [])
@@ -749,6 +756,8 @@ function rowToCafe(row) {
     naverLink: row.naver_link || "",
     tags: row.tags || {},
     outletRange: row.outlet_range || "none",
+    parkingSpots: row.parking_spots ?? null,
+    parkingNote: row.parking_note || "",
     seats: row.seats || 0,
     rating: row.rating || 0,
     hours: row.hours || "정보 없음",
@@ -819,6 +828,8 @@ function useCafes(user) {
           naver_link: cafe.naverLink || "",
           tags: cafe.tags || {},
           outlet_range: cafe.outletRange || "none",
+          parking_spots: cafe.tags?.parking ? (Number(cafe.parkingSpots) || null) : null,
+          parking_note: cafe.tags?.parking ? (cafe.parkingNote || "").trim() : "",
           seats: Number(cafe.seats) || 0,
           hours: cafe.hours || "정보 없음",
           weekly_hours: cafe.weeklyHours || null,
@@ -858,6 +869,8 @@ function useCafes(user) {
           naver_link: cafe.naverLink || "",
           tags: cafe.tags || {},
           outlet_range: cafe.outletRange || "none",
+          parking_spots: cafe.tags?.parking ? (Number(cafe.parkingSpots) || null) : null,
+          parking_note: cafe.tags?.parking ? (cafe.parkingNote || "").trim() : "",
           seats: Number(cafe.seats) || 0,
           hours: cafe.hours || "정보 없음",
           weekly_hours: cafe.weeklyHours || null,
@@ -1058,6 +1071,7 @@ function CafeFinderInner() {
   const { favorites, toggleFavorite } = useFavorites(user);
   const { memos: cafeMemos, updateMemo: updateCafeMemo } = useCafeMemos();
   const { cafes, addCafe, updateCafe, addReview: addReviewToStore } = useCafes(user);
+  const floorplanStore = useFloorplanStore(user);
 
   const requireLogin = () => setShowLogin(true);
 
@@ -1260,6 +1274,8 @@ function CafeFinderInner() {
       hours: weeklyHoursSummary(data.weeklyHours) || "정보 없음",
       weeklyHours: data.weeklyHours,
       desc: data.desc,
+      parkingSpots: data.parkingSpots,
+      parkingNote: data.parkingNote,
       lat: loc.lat,
       lng: loc.lng,
     };
@@ -1329,7 +1345,7 @@ function CafeFinderInner() {
                   {FILTERS.filter((f) => c.tags[f.key]).map(({ key, label, icon: Icon }) => (
                     <span key={key} style={styles.badge}>
                       <Icon size={12} color="#3D6B5F" />
-                      {key === "outlet" ? outletRangeLabel(c) : label}
+                      {tagBadgeLabel(c, key, label)}
                     </span>
                   ))}
                 </div>
@@ -1609,6 +1625,7 @@ function CafeFinderInner() {
           onUpdateMemo={updateCafeMemo}
           onRequireLogin={requireLogin}
           onEdit={startEditCafe}
+          floorplanStore={floorplanStore}
         />
       )}
 
@@ -1763,7 +1780,211 @@ function LoginModal({ onClose, onSignIn, reason, errorText }) {
   );
 }
 
-function CafeDetailModal({ cafe, onClose, onAddReview, isFavorite, cafeMemo = "", isLoggedIn, onToggleFavorite, onUpdateMemo, onRequireLogin, onEdit }) {
+// 휴대폰 카메라 원본 사진은 수 MB로 커서 FileReader.readAsDataURL이 간헐적으로
+// 실패하고 localStorage 용량도 금방 차므로, 캔버스로 축소·압축한 뒤 저장한다.
+const fileToCompressedDataUrl = (file, maxDimension = 1440, quality = 0.82) => new Promise((resolve, reject) => {
+  const objectUrl = URL.createObjectURL(file);
+  const img = new Image();
+  img.onload = () => {
+    const scale = Math.min(1, maxDimension / Math.max(img.width, img.height));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(img.width * scale));
+    canvas.height = Math.max(1, Math.round(img.height * scale));
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    URL.revokeObjectURL(objectUrl);
+    resolve(canvas.toDataURL("image/jpeg", quality));
+  };
+  img.onerror = () => {
+    URL.revokeObjectURL(objectUrl);
+    reject(new Error(`이미지를 불러오지 못했습니다: ${file.name}`));
+  };
+  img.src = objectUrl;
+});
+
+/* ---------- 좌석 배치도 (사진 위에 콘센트 위치 핀) ---------- */
+const FLOORPLAN_STORAGE_KEY = "cafe-finder:floorplans";
+const FLOORPLAN_MAX_IMAGE_CHARS = 800000; // DB check 제약(900000)보다 여유 있게
+const FLOORPLAN_MAX_PINS = 60;
+
+async function compressFloorplanImage(file) {
+  for (const [maxDimension, quality] of [[1200, 0.72], [1000, 0.6], [800, 0.5]]) {
+    const dataUrl = await fileToCompressedDataUrl(file, maxDimension, quality);
+    if (dataUrl.length <= FLOORPLAN_MAX_IMAGE_CHARS) return dataUrl;
+  }
+  throw new Error("사진 용량이 너무 커요. 더 작은 사진으로 시도해주세요.");
+}
+
+function useFloorplanStore(user) {
+  const useLocal = !supabase || !!user?.isDev;
+
+  const load = useCallback(async (cafeId) => {
+    if (useLocal) {
+      try {
+        return JSON.parse(localStorage.getItem(FLOORPLAN_STORAGE_KEY) || "{}")[cafeId] || null;
+      } catch (e) {
+        return null;
+      }
+    }
+    const { data, error } = await supabase.from("cafe_floorplans").select("image, outlets").eq("cafe_id", cafeId).maybeSingle();
+    if (error) throw error;
+    return data ? { image: data.image, outlets: Array.isArray(data.outlets) ? data.outlets : [] } : null;
+  }, [useLocal]);
+
+  // image가 있으면 새 배치도(교체 포함), 없으면 콘센트 핀만 갱신
+  const save = useCallback(async (cafeId, { image, outlets }) => {
+    if (useLocal) {
+      const all = JSON.parse(localStorage.getItem(FLOORPLAN_STORAGE_KEY) || "{}");
+      all[cafeId] = { image: image || all[cafeId]?.image, outlets };
+      localStorage.setItem(FLOORPLAN_STORAGE_KEY, JSON.stringify(all));
+      return all[cafeId];
+    }
+    const now = new Date().toISOString();
+    const query = image
+      ? supabase.from("cafe_floorplans").upsert({ cafe_id: cafeId, image, outlets, updated_at: now }, { onConflict: "cafe_id" })
+      : supabase.from("cafe_floorplans").update({ outlets, updated_at: now }).eq("cafe_id", cafeId);
+    const { error } = await query;
+    if (error) throw error;
+    return { image, outlets };
+  }, [useLocal]);
+
+  return { load, save };
+}
+
+function FloorplanTab({ cafeId, store }) {
+  const [plan, setPlan] = useState(null);
+  const [status, setStatus] = useState("loading");
+  const [draft, setDraft] = useState(null); // 편집 중일 때만 { image, outlets, isNewImage }
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const stageRef = useRef(null);
+
+  useEffect(() => {
+    let alive = true;
+    setStatus("loading");
+    store.load(cafeId)
+      .then((result) => { if (alive) { setPlan(result); setStatus("ready"); } })
+      .catch((e) => { console.warn("배치도 불러오기 실패:", e.message || e); if (alive) setStatus("error"); });
+    return () => { alive = false; };
+  }, [cafeId, store.load]);
+
+  const handleFile = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    setError("");
+    try {
+      const image = await compressFloorplanImage(file);
+      setDraft({ image, outlets: [], isNewImage: true });
+    } catch (e) {
+      setError(e.message || "사진을 처리하지 못했어요.");
+    }
+  };
+
+  const startEditPins = () => {
+    setError("");
+    setDraft({ image: plan.image, outlets: plan.outlets.map((p) => ({ ...p })), isNewImage: false });
+  };
+
+  const handleStageClick = (event) => {
+    if (!draft || !stageRef.current) return;
+    if (draft.outlets.length >= FLOORPLAN_MAX_PINS) {
+      setError(`콘센트 핀은 최대 ${FLOORPLAN_MAX_PINS}개까지 찍을 수 있어요.`);
+      return;
+    }
+    const rect = stageRef.current.getBoundingClientRect();
+    const x = Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width));
+    const y = Math.min(1, Math.max(0, (event.clientY - rect.top) / rect.height));
+    setError("");
+    setDraft((d) => ({ ...d, outlets: [...d.outlets, { x: Number(x.toFixed(4)), y: Number(y.toFixed(4)) }] }));
+  };
+
+  const removePin = (index) => setDraft((d) => ({ ...d, outlets: d.outlets.filter((_, i) => i !== index) }));
+
+  const savePlan = async () => {
+    setSaving(true);
+    setError("");
+    try {
+      await store.save(cafeId, { image: draft.isNewImage ? draft.image : undefined, outlets: draft.outlets });
+      setPlan({ image: draft.isNewImage ? draft.image : plan.image, outlets: draft.outlets });
+      setDraft(null);
+    } catch (e) {
+      console.warn("배치도 저장 실패:", e.message || e);
+      setError("저장에 실패했어요. 잠시 후 다시 시도해주세요.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const uploadLabel = (text, style) => (
+    <label style={style}>
+      {text}
+      <input type="file" accept="image/*" onChange={handleFile} style={{ display: "none" }} />
+    </label>
+  );
+
+  if (status === "loading") return <p style={styles.emptyPhotoText}>배치도를 불러오는 중이에요...</p>;
+  if (status === "error") return <p style={styles.emptyPhotoText}>배치도를 불러오지 못했어요.</p>;
+
+  const editing = !!draft;
+  const shown = editing ? draft : plan;
+
+  if (!shown) {
+    return (
+      <div style={styles.emptyPhotoState}>
+        <PhotoPlaceholderIcon size={40} color={COLOR.border} />
+        <p style={styles.emptyPhotoText}>아직 등록된 좌석 배치도가 없어요.<br />매장 전경 사진이나 손으로 그린 배치도를 올리고,<br />콘센트 위치를 눌러 표시해주세요.</p>
+        {uploadLabel("+ 배치도 올리기", styles.centerUploadBtn)}
+        {error && <div style={styles.floorError}>{error}</div>}
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div style={styles.floorHeader}>
+        <h3 style={styles.reviewTitle}>좌석 배치도</h3>
+        <span style={styles.floorCount}>콘센트 {shown.outlets.length}곳 표시됨</span>
+      </div>
+      {editing && <p style={styles.floorHint}>콘센트가 있는 자리를 눌러 핀을 찍어주세요. 찍은 핀을 다시 누르면 지워져요.</p>}
+      <div
+        ref={stageRef}
+        style={{ ...styles.floorStage, cursor: editing ? "crosshair" : "default" }}
+        onClick={editing ? handleStageClick : undefined}
+        data-testid="floorplan-stage"
+      >
+        <img src={shown.image} alt="좌석 배치도" style={styles.floorImg} draggable={false} />
+        {shown.outlets.map((pin, index) => (
+          <button
+            key={`${pin.x}-${pin.y}-${index}`}
+            type="button"
+            style={{ ...styles.floorPin, left: `${pin.x * 100}%`, top: `${pin.y * 100}%`, pointerEvents: editing ? "auto" : "none" }}
+            onClick={(event) => { event.stopPropagation(); if (editing) removePin(index); }}
+            aria-label={editing ? "콘센트 핀 지우기" : "콘센트 위치"}
+          >
+            <OutletIcon size={15} color="#FFFDF8" />
+          </button>
+        ))}
+      </div>
+      {error && <div style={styles.floorError}>{error}</div>}
+      <div style={styles.floorActions}>
+        {editing ? (
+          <>
+            <button type="button" style={styles.cancelBtn} onClick={() => { setDraft(null); setError(""); }} disabled={saving}>취소</button>
+            <button type="button" style={{ ...styles.submitBtn, opacity: saving ? 0.5 : 1 }} onClick={savePlan} disabled={saving}>{saving ? "저장 중..." : "저장"}</button>
+          </>
+        ) : (
+          <>
+            <button type="button" style={styles.floorBtn} onClick={startEditPins}>콘센트 위치 수정</button>
+            {uploadLabel("사진 교체", styles.floorBtn)}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function CafeDetailModal({ cafe, onClose, onAddReview, isFavorite, cafeMemo = "", isLoggedIn, onToggleFavorite, onUpdateMemo, onRequireLogin, onEdit, floorplanStore }) {
   const openState = isOpenNow(cafe.hours, cafe.weeklyHours);
   const [memoDraft, setMemoDraft] = useState(cafeMemo);
   useEffect(() => { setMemoDraft(cafeMemo); }, [cafeMemo, cafe.id]);
@@ -1926,28 +2147,6 @@ function CafeDetailModal({ cafe, onClose, onAddReview, isFavorite, cafeMemo = ""
     setReviewSubmitError("");
   };
 
-  // 휴대폰 카메라 원본 사진은 수 MB로 커서 FileReader.readAsDataURL이 간헐적으로
-  // 실패하고 localStorage 용량도 금방 차므로, 캔버스로 축소·압축한 뒤 저장한다.
-  const fileToCompressedDataUrl = (file, maxDimension = 1440, quality = 0.82) => new Promise((resolve, reject) => {
-    const objectUrl = URL.createObjectURL(file);
-    const img = new Image();
-    img.onload = () => {
-      const scale = Math.min(1, maxDimension / Math.max(img.width, img.height));
-      const canvas = document.createElement("canvas");
-      canvas.width = Math.max(1, Math.round(img.width * scale));
-      canvas.height = Math.max(1, Math.round(img.height * scale));
-      const ctx = canvas.getContext("2d");
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-      URL.revokeObjectURL(objectUrl);
-      resolve(canvas.toDataURL("image/jpeg", quality));
-    };
-    img.onerror = () => {
-      URL.revokeObjectURL(objectUrl);
-      reject(new Error(`이미지를 불러오지 못했습니다: ${file.name}`));
-    };
-    img.src = objectUrl;
-  });
-
   const submitReview = async () => {
     if (!reviewText.trim() && reviewImages.length === 0) return;
     setSubmittingReview(true);
@@ -2070,9 +2269,10 @@ function CafeDetailModal({ cafe, onClose, onAddReview, isFavorite, cafeMemo = ""
         </div>
         <div style={styles.badgeRow}>
           {FILTERS.filter((filter) => cafe.tags[filter.key]).map(({ key, label, icon: Icon }) => (
-        <span key={key} style={styles.badge}><Icon size={12} color="#3D6B5F" />{key === "outlet" ? outletRangeLabel(cafe) : label}</span>
+        <span key={key} style={styles.badge}><Icon size={12} color="#3D6B5F" />{tagBadgeLabel(cafe, key, label)}</span>
           ))}
         </div>
+        {cafe.tags?.parking && cafe.parkingNote && <p style={styles.parkingNoteText}>주차 안내 · {cafe.parkingNote}</p>}
         <p style={styles.detailDescription}>{cafe.desc || "등록된 소개가 없습니다."}</p>
         <div style={styles.detailInfoGrid}>
           <div style={styles.infoCard}>
@@ -2114,8 +2314,13 @@ function CafeDetailModal({ cafe, onClose, onAddReview, isFavorite, cafeMemo = ""
             <button type="button" role="tab" aria-selected={detailTab === "reviews"} style={{ ...styles.detailTab, ...(detailTab === "reviews" ? styles.detailTabActive : {}) }} onClick={() => setDetailTab("reviews")}>
               리뷰
             </button>
+            <button type="button" role="tab" aria-selected={detailTab === "floorplan"} style={{ ...styles.detailTab, ...(detailTab === "floorplan" ? styles.detailTabActive : {}) }} onClick={() => setDetailTab("floorplan")}>
+              배치도
+            </button>
           </div>
-          {detailTab === "reviews" ? (
+          {detailTab === "floorplan" ? (
+            <FloorplanTab key={cafe.id} cafeId={cafe.id} store={floorplanStore} />
+          ) : detailTab === "reviews" ? (
             <div>
               <div style={styles.reviewSectionHeader}>
                 <h3 style={styles.reviewTitle}>리뷰</h3>
@@ -2278,6 +2483,8 @@ function CafeForm({ pickedLoc, initialCafe, onCancel, onSubmit, mapStatus, onSet
   const [desc, setDesc] = useState(() => initialCafe?.desc || "");
   const [outletRange, setOutletRange] = useState(() => initialCafe?.outletRange || null);
   const [tags, setTags] = useState(() => ({ outlet: false, large: false, interior: false, parking: false, cute: false, ...initialCafe?.tags }));
+  const [parkingSpots, setParkingSpots] = useState(() => (initialCafe?.parkingSpots ? String(initialCafe.parkingSpots) : ""));
+  const [parkingNote, setParkingNote] = useState(() => initialCafe?.parkingNote || "");
   const [geocoding, setGeocoding] = useState(false);
   const [geocodeFailed, setGeocodeFailed] = useState(false);
   const [placeQuery, setPlaceQuery] = useState("");
@@ -2569,12 +2776,25 @@ function CafeForm({ pickedLoc, initialCafe, onCancel, onSubmit, mapStatus, onSet
           ))}
         </div>
 
+        {tags.parking && (
+          <div style={styles.parkingFields}>
+            <label style={styles.parkingFieldLabel}>
+              주차 가능 대수
+              <input style={styles.input} type="number" min="0" inputMode="numeric" value={parkingSpots} onChange={(e) => setParkingSpots(e.target.value)} placeholder="예: 20 (모르면 비워두세요)" />
+            </label>
+            <label style={styles.parkingFieldLabel}>
+              주차 안내
+              <input style={styles.input} value={parkingNote} onChange={(e) => setParkingNote(e.target.value)} maxLength={120} placeholder="예: 건물 지하 주차장, 2시간 무료" />
+            </label>
+          </div>
+        )}
+
         <div style={styles.modalActions}>
           <button style={styles.cancelBtn} onClick={onCancel}>취소</button>
           <button
             style={{ ...styles.submitBtn, opacity: canSubmit ? 1 : 0.45, cursor: canSubmit ? "pointer" : "not-allowed" }}
             disabled={!canSubmit}
-            onClick={() => canSubmit && onSubmit({ name, dong: inferDong(address, placeQuery.split(" ")[0] || initialCafe?.dong), address, seats, weeklyHours: getSubmittedWeeklyHours(), desc, tags: { ...tags, outlet: outletRange !== "none" }, outletRange, naverName: naverPlace?.name, naverLink: naverPlace?.link, phone: naverPlace?.phone })}
+            onClick={() => canSubmit && onSubmit({ name, dong: inferDong(address, placeQuery.split(" ")[0] || initialCafe?.dong), address, seats, weeklyHours: getSubmittedWeeklyHours(), desc, tags: { ...tags, outlet: outletRange !== "none" }, outletRange, parkingSpots: tags.parking ? parkingSpots : "", parkingNote: tags.parking ? parkingNote : "", naverName: naverPlace?.name, naverLink: naverPlace?.link, phone: naverPlace?.phone })}
           >
             {isEditing ? "수정 완료" : "등록하기"}
           </button>
@@ -3120,6 +3340,18 @@ const styles = {
   detailTitle: { margin: "3px 0 0", fontFamily: "'Noto Serif KR', serif", fontSize: 22 },
   detailReviewCount: { margin: "4px 0 0", color: COLOR.inkSoft, fontSize: 12 },
   detailCloseBtn: { width: 40, height: 40, border: "none", borderRadius: 10, background: COLOR.bg, color: COLOR.ink, fontSize: 26, lineHeight: 1, cursor: "pointer" },
+  parkingFields: { display: "flex", flexDirection: "column", gap: 10, margin: "10px 0 4px", padding: "12px 14px", borderRadius: 10, border: `1px solid ${COLOR.border}`, background: "#FAF8F0" },
+  parkingFieldLabel: { display: "flex", flexDirection: "column", gap: 6, color: COLOR.inkSoft, fontSize: 12.5, fontWeight: 600 },
+  parkingNoteText: { margin: "8px 0 0", color: COLOR.teal, fontSize: 13, lineHeight: 1.5 },
+  floorHeader: { display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8, marginBottom: 6 },
+  floorCount: { color: COLOR.accent, fontSize: 12, fontWeight: 700 },
+  floorHint: { margin: "0 0 8px", padding: "8px 12px", borderRadius: 8, background: COLOR.tealSoft, color: COLOR.teal, fontSize: 12.5, lineHeight: 1.45 },
+  floorStage: { position: "relative", width: "100%", borderRadius: 12, overflow: "hidden", border: `1px solid ${COLOR.border}`, background: "#FAF8F0", touchAction: "manipulation", userSelect: "none" },
+  floorImg: { display: "block", width: "100%", height: "auto", pointerEvents: "none" },
+  floorPin: { position: "absolute", transform: "translate(-50%, -50%)", display: "flex", alignItems: "center", justifyContent: "center", width: 28, height: 28, padding: 0, border: "2px solid #FFFDF8", borderRadius: "50%", background: COLOR.accent, boxShadow: "0 2px 6px rgba(38,36,31,0.35)", cursor: "pointer" },
+  floorActions: { display: "flex", justifyContent: "flex-start", gap: 8, marginTop: 10, paddingBottom: 64 },
+  floorBtn: { display: "inline-flex", alignItems: "center", minHeight: 40, padding: "0 14px", borderRadius: 10, border: `1px solid ${COLOR.border}`, background: COLOR.surface, color: COLOR.ink, fontSize: 13, fontWeight: 600, cursor: "pointer" },
+  floorError: { marginTop: 8, color: "#b3441f", fontSize: 12.5 },
   detailHeaderActions: { display: "flex", alignItems: "center", gap: 8, flexShrink: 0 },
   detailEditBtn: { display: "flex", alignItems: "center", gap: 5, height: 40, padding: "0 12px", border: `1px solid ${COLOR.border}`, borderRadius: 10, background: COLOR.surface, color: COLOR.inkSoft, fontSize: 12.5, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" },
   detailFabClose: {
